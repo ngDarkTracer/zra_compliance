@@ -1,0 +1,21 @@
+{
+  "name": "zra_compliance",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@directus/sdk": "^19.0.1",
+    "axios": "^1.7.9",
+    "directus": "^11.4.1",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "pg": "^8.13.1",
+    "pnpm": "^10.2.0"
+  }
+}
