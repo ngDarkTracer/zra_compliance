@@ -15,6 +15,7 @@
   "rfdDt":null,
   "rfdRsnCd":null,
   "totItemCnt":2,
+
   "taxblAmtA":86.2069,
   "taxblAmtB":0.0,
   "taxblAmtC1":0.0,
@@ -30,6 +31,7 @@
   "taxblAmtEcm":0,
   "taxblAmtExeeg":0.0,
   "taxblAmtTot":0.0,
+
   "taxRtA":16,
   "taxRtB":16,
   "taxRtC1":0,
@@ -46,6 +48,7 @@
   "taxRtEcm":5,
   "taxRtExeeg":3,
   "taxRtTot":0,
+
   "taxAmtA":13.7931,
   "taxAmtB":0.0,
   "taxAmtC1":0.0,
@@ -61,11 +64,14 @@
   "taxAmtEcm":0.0,
   "taxAmtExeeg":0.0,
   "taxAmtTot":0.0,
+
   "totTaxblAmt":186.2069,
   "totTaxAmt":13.7931,
+
   "cashDcRt":25.0,
   "cashDcAmt":50.0,
   "totAmt":150,
+
   "prchrAcptcYn":"N",
   "regrId":"admin",
   "regrNm":"admin",
