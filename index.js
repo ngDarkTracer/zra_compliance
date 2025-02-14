@@ -2,9 +2,8 @@ require('dotenv').config()
 
 const { readItem, readItems } = require('@directus/sdk')
 const { Client } = require('pg')
-const express = require('express')
-
 const { parse } = require('./parse')
+const express = require('express')
 
 const app = express()
 app.use(express.json())
@@ -26,9 +25,18 @@ const port = process.env.PORT || 3000
 app.get('/invoice', async (req, res) => {
     try {
         const response = await postgres.query('select invoice.*, customer_name, JSON_AGG(travel_item) as travel_items from invoice inner join travel_item on invoice.id = travel_item.id_invoice inner join customer on customer.id = invoice.id_customer group by invoice.id, customer.id having count(travel_item) > 2 limit 100')
-        const exp = response.rows.find((item) => item.id === 1361);
+        const zraResponse = await fetch(`${process.env.ZRAURL}/vsdc/trnsSales/saveSales`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(parse(response.rows))
+        })
+
+        const result = await zraResponse.json();
         //console.log(JSON.stringify(parse(response.rows)))
-        res.send(parse(response.rows))
+        //res.send(parse(response.rows))
+        res.send(result)
     } catch (e) {
         res.send(`Error: ${e.message}`)
     }
@@ -60,16 +68,16 @@ app.listen(port, async () => {
     console.log(`Server connected. Listening on port: ${port}`)
 })
 
-async function getCollection(collection, index) {
-    try {
-        let result = null
-        if (!index)
-            return await client.request(readItems(collection));
-        else
-            return await client.request(readItem(collection, index));
-        console.log(`retrieve successfully: ${JSON.stringify(result)}`)
-    } catch(error) {
-        console.log(`retrieve error: ${JSON.stringify(error)}`)
-        return error
-    }
-}
+// async function getCollection(collection, index) {
+//     try {
+//         let result = null
+//         if (!index)
+//             return await client.request(readItems(collection));
+//         else
+//             return await client.request(readItem(collection, index));
+//         console.log(`retrieve successfully: ${JSON.stringify(result)}`)
+//     } catch(error) {
+//         console.log(`retrieve error: ${JSON.stringify(error)}`)
+//         return error
+//     }
+// }

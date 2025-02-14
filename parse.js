@@ -21,8 +21,8 @@ function parse(data) {
             rcptTyCd: row["invoice_number"] ? "S" : "R",
             pmtTyCd: "01", // Soon *
             salesSttsCd: "02", // Soon *
-            cfmDt: dateReformat(row["creation_date"].toISOString(), true),
-            salesDt: dateReformat(row["due_date"].toISOString(), false),
+            cfmDt: '20250202230000',//dateReformat(row["creation_date"].toISOString(), true),
+            salesDt: '20250202',//dateReformat(row["due_date"].toISOString(), false),
             cnclReqDt: null,
             cnclDt: null,
             rfdDt: null,
