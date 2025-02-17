@@ -28,7 +28,7 @@ function parse(data) {
             rfdDt: null,
             rfdRsnCd: null,
             totItemCnt: row["travel_items"].length,
-            taxblAmtA: currency(row["net_amount"]),
+            taxblAmtA: currency(row["amount"]).toFixed(4),
             taxblAmtB: 0,
             taxblAmtC1: 0,
             taxblAmtC2: 0,
@@ -59,7 +59,7 @@ function parse(data) {
             taxRtEcm: 5,
             taxRtExeeg: 3,
             taxRtTot: 0,
-            taxAmtA: (currency(row["amount"]) * taxRtA)/100,
+            taxAmtA: ((currency(row["amount"]) * taxRtA)/100).toFixed(4),
             taxAmtB: 0,
             taxAmtC1: 0,
             taxAmtC2: 0,
@@ -74,11 +74,11 @@ function parse(data) {
             taxAmtEcm: 0,
             taxAmtExeeg: 0,
             taxAmtTot: 0,
-            totTaxblAmt: currency(row["amount"]),
-            totTaxAmt: (currency(row["amount"]) * taxRtA)/100,
+            totTaxblAmt: currency(row["amount"]).toFixed(4),
+            totTaxAmt: ((currency(row["amount"]) * taxRtA)/100).toFixed(4),
             cashDcRt: 0,//25
             cashDcAmt: 0,//50
-            totAmt: currency(row["amount"]) + ((currency(row["amount"]) * taxRtA)/100),
+            totAmt: (currency(row["amount"]) + ((currency(row["amount"]) * taxRtA)/100)).toFixed(4),
             prchrAcptcYn: "N",
             regrId: "admin",
             regrNm: "admin",
@@ -96,12 +96,14 @@ function parse(data) {
                     itemCd: travel_item["id"],
                     itemClsCd: sectorCodes[travel_item["product_type"]].code,
                     itemNm: sectorCodes[travel_item["product_type"]].label,
-                    pkgUnitCd: "BE",
+                    pkgUnitCd: "EA",
                     pkg: 0,
-                    qtyUnitCd: "BE",
+                    qtyUnitCd: "EA",
                     qty: 1,
-                    prc: currency(travel_item["total_price"]) + ((currency(travel_item["total_price"]) * taxRtA)/100),
-                    splyAmt: currency(travel_item["total_price"]) + ((currency(travel_item["total_price"]) * taxRtA)/100),
+                    prc: (currency(travel_item["total_price"], travel_item["customer_rate"])
+                        + ((currency(travel_item["total_price"], travel_item["customer_rate"]) * taxRtA)/100)).toFixed(4),
+                    splyAmt: (currency(travel_item["total_price"], travel_item["customer_rate"])
+                        + ((currency(travel_item["total_price"], travel_item["customer_rate"]) * taxRtA)/100)).toFixed(4),
                     dcRt: 0,
                     dcAmt: 0,
                     isrccCd: "",
@@ -112,15 +114,16 @@ function parse(data) {
                     exciseTxCatCd: null,
                     tlCatCd: null,
                     iplCatCd: null,
-                    vatTaxblAmt: currency(travel_item["total_price"]),
-                    vatAmt: (currency(travel_item["total_price"]) * taxRtA)/100,
+                    vatTaxblAmt: (currency(travel_item["total_price"], travel_item["customer_rate"])).toFixed(4),
+                    vatAmt: ((currency(travel_item["total_price"], travel_item["customer_rate"]) * taxRtA)/100).toFixed(4),
                     exciseTaxblAmt: 0,
                     tlTaxblAmt: 0,
                     iplTaxblAmt: 0,
                     iplAmt: 0,
                     tlAmt: 0,
                     exciseTxAmt: 0,
-                    totAmt: currency(travel_item["total_price"]) + ((currency(travel_item["total_price"]) * taxRtA)/100)
+                    totAmt: (currency(travel_item["total_price"], travel_item["customer_rate"])
+                        + ((currency(travel_item["total_price"], travel_item["customer_rate"]) * taxRtA)/100)).toFixed(4)
                 }
             })
         }
@@ -128,8 +131,8 @@ function parse(data) {
     return rows
 }
 
-function currency(curr) {
-    return Number(curr.replace(/[$,]/g, ''))
+function currency(currency, rate) {
+    return Number(currency.replace(/[$,]/g, '')) * (rate || 1)
 }
 
 function dateReformat(date, withTime) {
@@ -141,3 +144,20 @@ function dateReformat(date, withTime) {
 }
 
 module.exports = { parse }
+
+
+// try {
+//     const response = await postgres.query('select invoice.*, customer_name, JSON_AGG(travel_item) as travel_items from invoice inner join travel_item on invoice.id = travel_item.id_invoice inner join customer on customer.id = invoice.id_customer group by invoice.id, customer.id having count(travel_item) > 2 limit 100')
+//     const zraResponse = await fetch(`${process.env.ZRAURL}/vsdc/trnsSales/saveSales`, {
+//         method: "POST",
+//         headers: {
+//             "Content-Type": "application/json"
+//         },
+//         body: JSON.stringify(parse(response.rows))
+//     })
+//
+//     const zra_response = await zraResponse.json();
+//     res.send(zra_response)
+// } catch (e) {
+//     res.send(`Error: ${e.message}`)
+// }

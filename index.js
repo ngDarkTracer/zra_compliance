@@ -1,9 +1,10 @@
 require('dotenv').config()
 
-const { readItem, readItems } = require('@directus/sdk')
+//const { readItem, readItems } = require('@directus/sdk')
 const { Client } = require('pg')
 const { parse } = require('./parse')
 const express = require('express')
+const cron = require('node-cron')
 
 const app = express()
 app.use(express.json())
@@ -24,30 +25,35 @@ const port = process.env.PORT || 3000
 
 app.get('/invoice', async (req, res) => {
     try {
-        const response = await postgres.query('select invoice.*, customer_name, JSON_AGG(travel_item) as travel_items from invoice inner join travel_item on invoice.id = travel_item.id_invoice inner join customer on customer.id = invoice.id_customer group by invoice.id, customer.id having count(travel_item) > 2 limit 100')
-        const zraResponse = await fetch(`${process.env.ZRAURL}/vsdc/trnsSales/saveSales`, {
+        const response = await postgres.query('select invoice.*, customer_name, JSON_AGG(travel_item) as travel_items from invoice inner join travel_item on invoice.id = travel_item.id_invoice inner join customer on customer.id = invoice.id_customer group by invoice.id, customer.id having count(travel_item) > 2 limit 10')
+        const parsedData = parse(response.rows)
+        const zra_response = await Promise.all(parsedData.map(invoice => fetch(`${process.env.ZRAURL}/vsdc/trnsSales/saveSales`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json"
             },
-            body: JSON.stringify(parse(response.rows))
-        })
-
-        const result = await zraResponse.json();
-        //console.log(JSON.stringify(parse(response.rows)))
-        //res.send(parse(response.rows))
-        res.send(result)
+            body: JSON.stringify(invoice)
+        }).then(response => response.json())))
+        res.send(zra_response)
     } catch (e) {
-        res.send(`Error: ${e.message}`)
+        res.send(`Error message: ${e.message}\n Error trace: ${e.stack}`)
     }
 })
 
 app.get('/credit_note', async (req, res) => {
     try {
-        const response = await postgres.query('select credit_note.*, customer_name, JSON_AGG(travel_item) as travel_items from credit_note inner join travel_item on credit_note.id = travel_item.id_credit_note inner join customer on customer.id = credit_note.id_customer group by credit_note.id, customer.id having count(travel_item) > 2 limit 1')
-        res.send(response.rows)
+        const response = await postgres.query('select credit_note.*, customer_name, JSON_AGG(travel_item) as travel_items from credit_note inner join travel_item on credit_note.id = travel_item.id_credit_note inner join customer on customer.id = credit_note.id_customer group by credit_note.id, customer.id having count(travel_item) > 2 limit 10')
+        const parsedData = parse(response.rows)
+        const zra_response = await Promise.all(parsedData.map(credit_note => fetch(`${process.env.ZRAURL}/vsdc/trnsSales/saveSales`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(credit_note)
+        }).then(response => response.json())))
+        res.send(zra_response)
     } catch (e) {
-        res.send(`Error: ${e.message}`)
+        res.send(`Error message: ${e.message}\n Error trace: ${e.stack}`)
     }
 })
 
@@ -63,7 +69,7 @@ app.listen(port, async () => {
         await postgres.connect()
         console.log(`Connected!`)
     } catch (error) {
-        console.log(`Error! => ${error.message}`)
+        console.log(`Connexion error: ${error.message}`)
     }
     console.log(`Server connected. Listening on port: ${port}`)
 })
