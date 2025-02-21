@@ -14,7 +14,8 @@ function parse(data) {
         return {
             tpin: process.env.TPIN,
             bhfId: process.env.BHFID,
-            orgInvcNo: 0,
+            orgInvcNo: 7,
+            orgSdcId: process.env.BHFID,
             cisInvcNo: "CIS001-1380",// row["invoice_number"],
             custNm: row["customer_name"],
             salesTyCd: "N",
@@ -26,7 +27,7 @@ function parse(data) {
             cnclReqDt: null,
             cnclDt: null,
             rfdDt: null,
-            rfdRsnCd: null,
+            rfdRsnCd: row["invoice_number"] ? null : '07',
             totItemCnt: row["travel_items"].length,
             taxblAmtA: currency(row["amount"]).toFixed(4),
             taxblAmtB: 0,

@@ -23,6 +23,99 @@ const port = process.env.PORT || 3000
 //     .with(authentication('json'))
 //     .with(rest());
 
+app.get('/', (req, res) => {
+    res.send(`
+<!DOCTYPE html>
+    <html lang="fr">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Invoice & Credit Note</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                height: 100vh;
+                background: linear-gradient(135deg, #4b6cb7, #182848);
+                color: white;
+                margin: 0;
+            }
+            .buttons {
+                margin-bottom: 20px;
+            }
+            button {
+                background: #ff9800;
+                border: none;
+                color: white;
+                padding: 12px 24px;
+                font-size: 18px;
+                cursor: pointer;
+                border-radius: 5px;
+                margin: 10px;
+                transition: 0.3s;
+            }
+            button:hover {
+                background: #e68900;
+            }
+            #response {
+                background: white;
+                color: black;
+                padding: 20px;
+                border-radius: 5px;
+                box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
+                width: 50%;
+                text-align: center;
+                display: none;
+                margin-top: 20px;
+            }
+            body {
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              height: 100vh;
+              margin: 0;
+              background-color: #f5f5f5;
+            }
+            
+            .spinner {
+              border: 8px solid #f3f3f3;
+              border-top: 8px solid #3498db;
+              border-radius: 50%;
+              width: 60px;
+              height: 60px;
+              animation: spin 1.5s linear infinite;
+              display: none;
+            }
+            
+            @keyframes spin {
+              0% { transform: rotate(0deg); }
+              100% { transform: rotate(360deg); }
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Invoice & Credit Note</h1>
+        <div class="buttons">
+            <button onclick="fetchData('invoice')">Invoice</button>
+            <button onclick="fetchData('credit_note')">Credit Note</button>
+        </div>
+        <div class="spinner"></div>
+        <script>
+            function fetchData(type) {
+                document.querySelector('.spinner').style.display = 'block'
+                if (type === 'invoice'){
+                    window.location.href = window.location.origin + '/invoice';
+                }else{
+                    window.location.href = window.location.origin + '/credit_note';}
+            }
+        </script>
+    </body>
+    </html>`)
+})
+
 app.get('/invoice', async (req, res) => {
     try {
         const response = await postgres.query('select invoice.*, customer_name, JSON_AGG(travel_item) as travel_items from invoice inner join travel_item on invoice.id = travel_item.id_invoice inner join customer on customer.id = invoice.id_customer group by invoice.id, customer.id having count(travel_item) > 2 limit 10')
@@ -43,15 +136,15 @@ app.get('/invoice', async (req, res) => {
 app.get('/credit_note', async (req, res) => {
     try {
         const response = await postgres.query('select credit_note.*, customer_name, JSON_AGG(travel_item) as travel_items from credit_note inner join travel_item on credit_note.id = travel_item.id_credit_note inner join customer on customer.id = credit_note.id_customer group by credit_note.id, customer.id having count(travel_item) > 2 limit 10')
-        const parsedData = parse(response.rows)
-        const zra_response = await Promise.all(parsedData.map(credit_note => fetch(`${process.env.ZRAURL}/vsdc/trnsSales/saveSales`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify(credit_note)
-        }).then(response => response.json())))
-        res.send(zra_response)
+        // const parsedData = parse(response.rows)
+        // const zra_response = await Promise.all(parsedData.map(credit_note => fetch(`${process.env.ZRAURL}/vsdc/trnsSales/saveSales`, {
+        //     method: "POST",
+        //     headers: {
+        //         "Content-Type": "application/json"
+        //     },
+        //     body: JSON.stringify(credit_note)
+        // }).then(response => response.json())))
+        res.send(response.rows)
     } catch (e) {
         res.send(`Error message: ${e.message}\n Error trace: ${e.stack}`)
     }
