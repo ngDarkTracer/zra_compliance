@@ -135,16 +135,22 @@ app.get('/invoice', async (req, res) => {
 
 app.get('/credit_note', async (req, res) => {
     try {
-        const response = await postgres.query('select credit_note.*, customer_name, JSON_AGG(travel_item) as travel_items from credit_note inner join travel_item on credit_note.id = travel_item.id_credit_note inner join customer on customer.id = credit_note.id_customer group by credit_note.id, customer.id having count(travel_item) > 2 limit 10')
-        // const parsedData = parse(response.rows)
-        // const zra_response = await Promise.all(parsedData.map(credit_note => fetch(`${process.env.ZRAURL}/vsdc/trnsSales/saveSales`, {
-        //     method: "POST",
-        //     headers: {
-        //         "Content-Type": "application/json"
-        //     },
-        //     body: JSON.stringify(credit_note)
-        // }).then(response => response.json())))
-        res.send(response.rows)
+        const credit_notes = await postgres.query('select credit_note.*, customer_name, JSON_AGG(air_booking) as travel_items from credit_note inner join air_booking on credit_note.id = air_booking.id_credit_note inner join customer on customer.id = credit_note.id_customer group by credit_note.id, customer.id having count(air_booking) > 2 limit 100')
+        const ticket_numbers = credit_notes.rows.map(row => row.travel_items[0].ticket_number)
+        const id_invoices = await postgres.query('select ticket_number, id_invoice from air_booking where id_invoice is not null and ticket_number = ANY($1)', [ticket_numbers])
+
+        const adjustedCredit_note = credit_notes.rows.map(credit_note => {
+            return { ...credit_note, linked_invoice: id_invoices.rows.find(({ ticket_number, id_invoice }) => ticket_number === credit_note.travel_items[0].ticket_number)?.id_invoice }
+        })
+        const parsedData = parse(adjustedCredit_note)
+        const zra_response = await Promise.all(parsedData.map(credit_note => fetch(`${process.env.ZRAURL}/vsdc/trnsSales/saveSales`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(credit_note)
+        }).then(response => response.json())))
+        res.send(adjustedCredit_note)
     } catch (e) {
         res.send(`Error message: ${e.message}\n Error trace: ${e.stack}`)
     }
