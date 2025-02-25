@@ -7,14 +7,6 @@ function parse(data, type) {
         misc: {name: 'misc', label: '', code: 'misc'},
     }
 
-    let id_invoices = null;
-
-    if (type === 'credit_note') {
-        id_invoices = data.map(({ linked_invoice }) => linked_invoice )
-    }
-
-    // Query database...
-
     const { taxRtA, taxRtB, taxRtC1, taxRtEcm, taxRtC2, taxRtC3, taxRtD, taxRtE, taxRtExeeg, taxRtF, taxRtIpl1, taxRtIpl2, taxRtRvat, taxRtTot, tlAmt, taxRtTl}
         = { taxRtA: 16, taxRtB: 16, taxRtC1: 0, taxRtC2: 0, taxRtC3: 0, taxRtD: 0, tlAmt: 0, taxRtRvat: 16, taxRtE: 0, taxRtF: 10, taxRtIpl1: 5, taxRtIpl2: 0, taxRtTl: 1.5, taxRtEcm: 5, taxRtExeeg: 3, taxRtTot: 0 }
 
@@ -22,9 +14,9 @@ function parse(data, type) {
         return {
             tpin: process.env.TPIN,
             bhfId: process.env.BHFID,
-            orgInvcNo: 7,
-            //orgSdcId: process.env.BHFID,
-            cisInvcNo: "CIS001-1380",// row["invoice_number"],
+            orgInvcNo: 'CIS001-1383',
+            orgSdcId: 'SDC0010002345',
+            cisInvcNo: "CRN-256",// row["invoice_number"],
             custNm: row["customer_name"],
             salesTyCd: "N",
             rcptTyCd: row["invoice_number"] ? "S" : "R",

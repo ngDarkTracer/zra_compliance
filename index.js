@@ -17,6 +17,14 @@ const postgres = new Client({
     database: process.env.DB_DATABASE
 })
 
+const local_postgres = new Client({
+    user: process.env.DB_AB_USER,
+    password: process.env.DB_AB_PASSWORD,
+    host: process.env.DB_AB_HOST,
+    port: process.env.DB_AB_PORT,
+    database: process.env.DB_AB_DATABASE
+})
+
 const port = process.env.PORT || 3000
 
 // const client = createDirectus('https://directus-rapid-demo.onrender.com/')
@@ -135,22 +143,31 @@ app.get('/invoice', async (req, res) => {
 
 app.get('/credit_note', async (req, res) => {
     try {
-        const credit_notes = await postgres.query('select credit_note.*, customer_name, JSON_AGG(air_booking) as travel_items from credit_note inner join air_booking on credit_note.id = air_booking.id_credit_note inner join customer on customer.id = credit_note.id_customer group by credit_note.id, customer.id having count(air_booking) > 2 limit 100')
-        const ticket_numbers = credit_notes.rows.map(row => row.travel_items[0].ticket_number)
-        const id_invoices = await postgres.query('select ticket_number, id_invoice from air_booking where id_invoice is not null and ticket_number = ANY($1)', [ticket_numbers])
+        //const credit_notes = await postgres.query('select credit_note.*, customer_name, JSON_AGG(air_booking) as travel_items from credit_note inner join air_booking on credit_note.id = air_booking.id_credit_note inner join customer on customer.id = credit_note.id_customer group by credit_note.id, customer.id having count(air_booking) > 2 limit 1')
+        const air_bookings = await postgres.query('SELECT ticket_number, ARRAY_AGG(ROW_TO_JSON(air_booking)) AS bookings FROM air_booking GROUP BY ticket_number HAVING COUNT(*) > 2 limit 10')
 
-        const adjustedCredit_note = credit_notes.rows.map(credit_note => {
-            return { ...credit_note, linked_invoice: id_invoices.rows.find(({ ticket_number, id_invoice }) => ticket_number === credit_note.travel_items[0].ticket_number)?.id_invoice }
+        const reformattedAirbooking = air_bookings.rows.map((air_booking) => {
+            return {...air_booking, bookings: air_booking?.bookings?.filter(travel_item => (travel_item?.id_invoice || travel_item?.id_credit_note))}
         })
-        const parsedData = parse(adjustedCredit_note)
-        const zra_response = await Promise.all(parsedData.map(credit_note => fetch(`${process.env.ZRAURL}/vsdc/trnsSales/saveSales`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify(credit_note)
-        }).then(response => response.json())))
-        res.send(adjustedCredit_note)
+
+        // const id_invoices = await postgres.query('select ticket_number, id_invoice from air_booking where id_invoice is not null and ticket_number = ANY($1)', [ticket_numbers])
+        //
+        // const tab = id_invoices.rows.map(inv => inv.id_invoice)
+        //
+        // const test = await local_postgres.query('select zra_invoice, ab_invoice from invoices where ab_invoice = ANY($1)', [tab])
+        //
+        // const adjustedCredit_note = credit_notes.rows.map(credit_note => {
+        //     return { ...credit_note, linked_invoice: id_invoices.rows.find(({ ticket_number, id_invoice }) => ticket_number === credit_note.travel_items[0].ticket_number)?.id_invoice }
+        // })
+        // const parsedData = parse(credit_notes.rows)
+        // const zra_response = await Promise.all(parsedData.map(credit_note => fetch(`${process.env.ZRAURL}/vsdc/trnsSales/saveSales`, {
+        //     method: "POST",
+        //     headers: {
+        //         "Content-Type": "application/json"
+        //     },
+        //     body: JSON.stringify(credit_note)
+        // }).then(response => response.json())))
+        res.send(reformattedAirbooking)
     } catch (e) {
         res.send(`Error message: ${e.message}\n Error trace: ${e.stack}`)
     }
@@ -163,9 +180,10 @@ app.get('/credit_note', async (req, res) => {
 // })
 
 app.listen(port, async () => {
-    console.log(`Connecting...`)
+    console.log(`Connecting to databases...`)
     try {
         await postgres.connect()
+        await local_postgres.connect()
         console.log(`Connected!`)
     } catch (error) {
         console.log(`Connexion error: ${error.message}`)
