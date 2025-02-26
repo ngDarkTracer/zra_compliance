@@ -123,8 +123,8 @@ app.get('/', (req, res) => {
 
 app.get('/invoice', async (req, res) => {
     try {
-        const response = await postgres.query('select invoice.*, customer_name, JSON_AGG(travel_item) as travel_items from invoice inner join travel_item on invoice.id = travel_item.id_invoice inner join customer on customer.id = invoice.id_customer group by invoice.id, customer.id having count(travel_item) > 2 limit 10')
-        const parsedData = parse(response.rows)
+        const response = (await postgres.query('select invoice.*, customer_name, JSON_AGG(travel_item) as travel_items from invoice inner join travel_item on invoice.id = travel_item.id_invoice inner join customer on customer.id = invoice.id_customer group by invoice.id, customer.id having count(travel_item) > 2 limit 10')).rows
+        const parsedData = parse(response, 'invoice')
         const zra_response = await Promise.all(parsedData.map(invoice => fetch(`${process.env.ZRAURL}/vsdc/trnsSales/saveSales`, {
             method: "POST",
             headers: {
@@ -150,12 +150,25 @@ app.get('/credit_note', async (req, res) => {
         }, [])
             .filter(air_booking => air_booking.id_credit_note && air_booking.id_invoice)
 
-        const groupedItems = groupBy(air_bookings, "id_credit_note") // Group element by id_invoice
+        const invoices_ids = air_bookings.map(air_booking => air_booking.id_invoice)
 
-        const credit_notes = (await postgres.query('select * from credit_note where id = ANY($1)', [Object.keys(groupedItems)])).rows
-            .map(credit_note => ({...credit_note, travel_items: groupedItems[credit_note.id]})) // Query all credit where id in groupedItems tab and associate each credit_note with its travel_item
+        const invoices_numbers = (await postgres.query('select id, invoice_number from invoice where id = ANY($1)', [invoices_ids])).rows
+            .reduce((acc, invoice_number) => {
+                acc[invoice_number?.id] = invoice_number?.invoice_number
+                return acc
+            }, {})
 
-        // const parsedData = parse(credit_notes.rows)
+        const reformatted_air_bookings = air_bookings.map(air_booking => ({
+            ...air_booking,
+            id_invoice: invoices_numbers[air_booking.id_invoice]
+        }))
+
+        const grouped_credits_notes = groupBy(reformatted_air_bookings, 'id_credit_note') // Group element by id_invoice
+
+        const credit_notes = (await postgres.query('select * from credit_note where id = ANY($1)', [Object.keys(grouped_credits_notes)])).rows
+            .map(credit_note => ({...credit_note, travel_items: grouped_credits_notes[credit_note.id]})) // Query all credit where id in groupedItems tab and associate each credit_note with its travel_item
+
+        // const parsedData = parse(credit_notes, 'credit_note')
         // const zra_response = await Promise.all(parsedData.map(credit_note => fetch(`${process.env.ZRAURL}/vsdc/trnsSales/saveSales`, {
         //     method: "POST",
         //     headers: {
