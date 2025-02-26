@@ -27,9 +27,6 @@ const local_postgres = new Client({
 
 const port = process.env.PORT || 3000
 
-// const client = createDirectus('https://directus-rapid-demo.onrender.com/')
-//     .with(authentication('json'))
-//     .with(rest());
 
 app.get('/', (req, res) => {
     res.send(`
@@ -143,22 +140,21 @@ app.get('/invoice', async (req, res) => {
 
 app.get('/credit_note', async (req, res) => {
     try {
-        //const credit_notes = await postgres.query('select credit_note.*, customer_name, JSON_AGG(air_booking) as travel_items from credit_note inner join air_booking on credit_note.id = air_booking.id_credit_note inner join customer on customer.id = credit_note.id_customer group by credit_note.id, customer.id having count(air_booking) > 2 limit 1')
-        const air_bookings = await postgres.query('SELECT ticket_number, ARRAY_AGG(ROW_TO_JSON(air_booking)) AS bookings FROM air_booking GROUP BY ticket_number HAVING COUNT(*) > 2 limit 10')
-
-        const reformattedAirbooking = air_bookings.rows.map((air_booking) => {
-            return {...air_booking, bookings: air_booking?.bookings?.filter(travel_item => (travel_item?.id_invoice || travel_item?.id_credit_note))}
+        const air_bookings = (await postgres.query('SELECT ticket_number, ARRAY_AGG(ROW_TO_JSON(air_booking)) AS bookings FROM air_booking GROUP BY ticket_number HAVING COUNT(*) > 1 limit 50'))?.rows.map((air_booking) => {
+            return {...air_booking, bookings: air_booking?.bookings?.filter(travel_item => (travel_item?.id_invoice || travel_item?.id_credit_note))} // Remove item which has an empty id_invoice and an empty credit_note
         })
+            .reduce((acc, air_booking) => {
+            let linkedInvoice = air_booking.bookings.find(ab => ab.id_invoice)?.id_invoice
+            acc.push(...air_booking.bookings.map(ab => ({...ab, id_invoice: linkedInvoice || ab.id_invoice})))
+            return acc
+        }, [])
+            .filter(air_booking => air_booking.id_credit_note && air_booking.id_invoice)
 
-        // const id_invoices = await postgres.query('select ticket_number, id_invoice from air_booking where id_invoice is not null and ticket_number = ANY($1)', [ticket_numbers])
-        //
-        // const tab = id_invoices.rows.map(inv => inv.id_invoice)
-        //
-        // const test = await local_postgres.query('select zra_invoice, ab_invoice from invoices where ab_invoice = ANY($1)', [tab])
-        //
-        // const adjustedCredit_note = credit_notes.rows.map(credit_note => {
-        //     return { ...credit_note, linked_invoice: id_invoices.rows.find(({ ticket_number, id_invoice }) => ticket_number === credit_note.travel_items[0].ticket_number)?.id_invoice }
-        // })
+        const groupedItems = groupBy(air_bookings, "id_credit_note") // Group element by id_invoice
+
+        const credit_notes = (await postgres.query('select * from credit_note where id = ANY($1)', [Object.keys(groupedItems)])).rows
+            .map(credit_note => ({...credit_note, travel_items: groupedItems[credit_note.id]})) // Query all credit where id in groupedItems tab and associate each credit_note with its travel_item
+
         // const parsedData = parse(credit_notes.rows)
         // const zra_response = await Promise.all(parsedData.map(credit_note => fetch(`${process.env.ZRAURL}/vsdc/trnsSales/saveSales`, {
         //     method: "POST",
@@ -167,7 +163,7 @@ app.get('/credit_note', async (req, res) => {
         //     },
         //     body: JSON.stringify(credit_note)
         // }).then(response => response.json())))
-        res.send(reformattedAirbooking)
+        res.send(credit_notes)
     } catch (e) {
         res.send(`Error message: ${e.message}\n Error trace: ${e.stack}`)
     }
@@ -204,3 +200,14 @@ app.listen(port, async () => {
 //         return error
 //     }
 // }
+
+function groupBy(array, key) {
+    return array.reduce((result, obj) => {
+        const value = obj[key];
+        if (!result[value]) {
+            result[value] = [];
+        }
+        result[value].push(obj);
+        return result;
+    }, {});
+}
