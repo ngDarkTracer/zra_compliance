@@ -74,7 +74,7 @@ app.get('/credit_note', async (req, res) => {
             },
             body: JSON.stringify(credit_note)
         }).then(response => response.json())))
-        res.send(zra_response)
+        res.send(parsedData)
     } catch (e) {
         res.send(`Error message: ${e.message}\n Error trace: ${e.stack}`)
     }
