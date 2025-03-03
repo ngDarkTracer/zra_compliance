@@ -14,7 +14,7 @@ function parse(data) {
         return {
             tpin: process.env.TPIN,
             bhfId: process.env.BHFID,
-            orgInvcNo: row["invoice_number"] ? 0 : 7,
+            orgInvcNo: row["invoice_number"] ? 0 : 7,// compute
             orgSdcId: !row["invoice_number"] ? process.env.ORGSDCID : null,
             cisInvcNo: "CIS001-1387",// row["invoice_number"],
             custNm: row["customer_name"],
@@ -94,7 +94,7 @@ function parse(data) {
             itemList: row?.travel_items?.map((travel_item, index) => {
                 return {
                     itemSeq: index + 1,
-                    itemCd: travel_item["id"],
+                    itemCd: travel_item["id"],// compute
                     itemClsCd: sectorCodes[travel_item["product_type"]].code,
                     itemNm: sectorCodes[travel_item["product_type"]].label,
                     pkgUnitCd: "EA",

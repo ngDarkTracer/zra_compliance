@@ -37,7 +37,11 @@ app.get('/invoice', async (req, res) => {
 
 app.get('/credit_note', async (req, res) => {
     try {
-        const air_bookings = (await postgres.query('SELECT ticket_number, ARRAY_AGG(ROW_TO_JSON(air_booking)) AS bookings FROM air_booking GROUP BY ticket_number HAVING COUNT(*) > 1 limit 10'))?.rows.map((air_booking) => {
+        const credit_notes_ids = (await postgres.query('select id from credit_note limit 10')).rows.map(credit_note_id => credit_note_id.id)
+
+        const ticket_numbers_ids = (await postgres.query('select ARRAY_AGG(ticket_number) as ticket_numbers from air_booking where id_credit_note = ANY($1)', [credit_notes_ids])).rows[0]?.ticket_numbers
+
+        const air_bookings = (await postgres.query('SELECT ticket_number, ARRAY_AGG(ROW_TO_JSON(air_booking)) AS bookings FROM air_booking WHERE ticket_number = ANY($1) GROUP BY ticket_number HAVING COUNT(*) > 1', [ticket_numbers_ids]))?.rows.map((air_booking) => {
             return {...air_booking, bookings: air_booking?.bookings?.filter(travel_item => (travel_item?.id_invoice || travel_item?.id_credit_note))} // Remove item which has an empty id_invoice and an empty credit_note
         })
             .reduce((acc, air_booking) => {
@@ -67,14 +71,15 @@ app.get('/credit_note', async (req, res) => {
 
         const parsedData = parse(credit_notes)
 
-        const zra_response = await Promise.all(parsedData.map(credit_note => fetch(`${process.env.ZRAURL}/vsdc/trnsSales/saveSales`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify(credit_note)
-        }).then(response => response.json())))
-        res.send(parsedData)
+        // const zra_response = await Promise.all(parsedData.map(credit_note => fetch(`${process.env.ZRAURL}/vsdc/trnsSales/saveSales`, {
+        //     method: "POST",
+        //     headers: {
+        //         "Content-Type": "application/json"
+        //     },
+        //     body: JSON.stringify(credit_note)
+        // }).then(response => response.json())))
+        // res.send(parsedData)
+        res.send(credit_notes)
     } catch (e) {
         res.send(`Error message: ${e.message}\n Error trace: ${e.stack}`)
     }
