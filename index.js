@@ -37,6 +37,8 @@ app.get('/invoice', async (req, res) => {
 
 app.get('/credit_note', async (req, res) => {
     try {
+        const error_message = []
+
         const credit_notes_ids = (await postgres.query('select id from credit_note limit 10')).rows.map(credit_note_id => credit_note_id.id)
 
         const ticket_numbers_ids = (await postgres.query('select ARRAY_AGG(ticket_number) as ticket_numbers from air_booking where id_credit_note = ANY($1)', [credit_notes_ids])).rows[0]?.ticket_numbers
@@ -45,8 +47,8 @@ app.get('/credit_note', async (req, res) => {
             return {...air_booking, bookings: air_booking?.bookings?.filter(travel_item => (travel_item?.id_invoice || travel_item?.id_credit_note))} // Remove item which has an empty id_invoice and an empty credit_note
         })
             .reduce((acc, air_booking) => {
-                let linkedInvoice = air_booking.bookings.find(ab => ab.id_invoice)?.id_invoice
-                acc.push(...air_booking.bookings.map(ab => ({...ab, id_invoice: linkedInvoice || ab.id_invoice})))
+                let linkedInvoice = air_booking.bookings.find(ab => ab.id_invoice)
+                acc.push(...air_booking.bookings.map(ab => ({...ab, id:linkedInvoice?.id, id_invoice: linkedInvoice?.id_invoice || ab.id_invoice})))
                 return acc
             }, [])
             .filter(air_booking => air_booking.id_credit_note && air_booking.id_invoice)
@@ -54,8 +56,8 @@ app.get('/credit_note', async (req, res) => {
         const invoices_ids = air_bookings.map(air_booking => air_booking.id_invoice)
 
         const invoices_numbers = (await postgres.query('select id, invoice_number from invoice where id = ANY($1)', [invoices_ids])).rows
-            .reduce((acc, invoice_number) => {
-                acc[invoice_number?.id] = invoice_number?.invoice_number
+            .reduce((acc, {id, invoice_number}) => {
+                acc[id] = invoice_number
                 return acc
             }, {})
 
@@ -67,18 +69,25 @@ app.get('/credit_note', async (req, res) => {
         const grouped_credits_notes = groupBy(reformatted_air_bookings, 'id_credit_note') // Group element by id_invoice
 
         const credit_notes = (await postgres.query('select * from credit_note where id = ANY($1)', [Object.keys(grouped_credits_notes)])).rows
-            .map(credit_note => ({...credit_note, travel_items: grouped_credits_notes[credit_note.id]})) // Query all credit where id in groupedItems tab and associate each credit_note with its travel_item
+            .map(credit_note => {
+                if (Object.keys(groupBy(grouped_credits_notes[credit_note.id], 'id_invoice')).length > 1) {
+                    error_message.push({ message: `The credit_note: ${credit_note.number} can't be save because it have refund items which came from different invoices.` })
+                    return
+                } else {
+                    return {...credit_note, travel_items: grouped_credits_notes[credit_note.id]}
+                }
+            })
+            .filter(credit_note => credit_note) // Query all credit where id in groupedItems tab and associate each credit_note with its travel_item
 
         const parsedData = parse(credit_notes)
 
-        // const zra_response = await Promise.all(parsedData.map(credit_note => fetch(`${process.env.ZRAURL}/vsdc/trnsSales/saveSales`, {
-        //     method: "POST",
-        //     headers: {
-        //         "Content-Type": "application/json"
-        //     },
-        //     body: JSON.stringify(credit_note)
-        // }).then(response => response.json())))
-        // res.send(parsedData)
+        const zra_response = await Promise.all(parsedData.map(credit_note => fetch(`${process.env.ZRAURL}/vsdc/trnsSales/saveSales`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(credit_note)
+        }).then(response => response.json())))
         res.send(credit_notes)
     } catch (e) {
         res.send(`Error message: ${e.message}\n Error trace: ${e.stack}`)
