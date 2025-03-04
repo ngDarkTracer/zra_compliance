@@ -16,7 +16,7 @@ function parse(data) {
             bhfId: process.env.BHFID,
             orgInvcNo: row["invoice_number"] ? 0 : 7,// compute
             orgSdcId: !row["invoice_number"] ? process.env.ORGSDCID : null,
-            cisInvcNo: "CIS001-1387",// row["invoice_number"],
+            cisInvcNo: row["invoice_number"] || row["number"],
             custNm: row["customer_name"],
             salesTyCd: "N",
             rcptTyCd: row["invoice_number"] ? "S" : "R",

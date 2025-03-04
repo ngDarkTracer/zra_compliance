@@ -4,6 +4,8 @@ const { Client } = require('pg')
 const { parse } = require('./parse')
 const express = require('express')
 const cron = require('node-cron')
+const {post} = require("axios");
+const {query} = require("express");
 
 const app = express()
 app.use(express.json())
@@ -20,16 +22,36 @@ const port = process.env.PORT || 3000
 
 app.get('/invoice', async (req, res) => {
     try {
-        const response = (await postgres.query('select invoice.*, customer_name, JSON_AGG(travel_item) as travel_items from invoice inner join travel_item on invoice.id = travel_item.id_invoice inner join customer on customer.id = invoice.id_customer group by invoice.id, customer.id having count(travel_item) > 2 limit 10')).rows
+        const invoiceMap = []
+        const response_message = []
+        const response = (await postgres.query('select invoice.*, customer_name, JSON_AGG(travel_item) as travel_items from invoice inner join travel_item on invoice.id = travel_item.id_invoice inner join customer on customer.id = invoice.id_customer group by invoice.id, customer.id having count(travel_item) > 10 limit 1')).rows
         const parsedData = parse(response)
-        const zra_response = await Promise.all(parsedData.map(invoice => fetch(`${process.env.ZRAURL}/vsdc/trnsSales/saveSales`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify(invoice)
-        }).then(response => response.json())))
-        res.send(zra_response)
+
+        for (const invoice of parsedData) {
+            const zra_response = await fetch(`${process.env.ZRAURL}/vsdc/trnsSales/saveSales`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(invoice)
+            }).then(response => response.json())
+            switch (zra_response?.resultCd) {
+                case '000':
+                    invoiceMap.push({ ab_invoice_number: invoice?.cisInvcNo, zra_invoice: zra_response?.data?.rcptNo })
+                    response_message.push({ message: `Invoice: ${invoice?.cisInvcNo} created successfully` })
+                    break
+                default:
+                    response_message.push({ message: `${zra_response?.resultMsg}` })
+            }
+        }
+
+        const queries = invoiceMap?.map(({ab_invoice_number, zra_invoice}) => {
+            return { query: `update invoice set zra_invoice_id = $1 where invoice_number = $2`, values: [zra_invoice, ab_invoice_number]}
+        })
+
+        const ab_response = await Promise.all(queries.map(qry => postgres.query(qry.query, qry.values)))
+
+        res.send(response_message)
     } catch (e) {
         res.send(`Error message: ${e.message}\n Error trace: ${e.stack}`)
     }
@@ -37,9 +59,9 @@ app.get('/invoice', async (req, res) => {
 
 app.get('/credit_note', async (req, res) => {
     try {
-        const error_message = []
+        const response_message = []
 
-        const credit_notes_ids = (await postgres.query('select id from credit_note limit 10')).rows.map(credit_note_id => credit_note_id.id)
+        const credit_notes_ids = (await postgres.query('select id from credit_note limit 100')).rows.map(credit_note_id => credit_note_id.id)
 
         const ticket_numbers_ids = (await postgres.query('select ARRAY_AGG(ticket_number) as ticket_numbers from air_booking where id_credit_note = ANY($1)', [credit_notes_ids])).rows[0]?.ticket_numbers
 
@@ -55,6 +77,8 @@ app.get('/credit_note', async (req, res) => {
 
         const invoices_ids = air_bookings.map(air_booking => air_booking.id_invoice)
 
+        //const zred_invoice = (await postgres.query('select id from invoice where id = ANY($1)', [invoices_ids])).rows.map(({id}) => id)
+
         const invoices_numbers = (await postgres.query('select id, invoice_number from invoice where id = ANY($1)', [invoices_ids])).rows
             .reduce((acc, {id, invoice_number}) => {
                 acc[id] = invoice_number
@@ -69,26 +93,43 @@ app.get('/credit_note', async (req, res) => {
         const grouped_credits_notes = groupBy(reformatted_air_bookings, 'id_credit_note') // Group element by id_invoice
 
         const credit_notes = (await postgres.query('select * from credit_note where id = ANY($1)', [Object.keys(grouped_credits_notes)])).rows
-            .map(credit_note => {
+            ?.map(credit_note => {
                 if (Object.keys(groupBy(grouped_credits_notes[credit_note.id], 'id_invoice')).length > 1) {
-                    error_message.push({ message: `The credit_note: ${credit_note.number} can't be save because it have refund items which came from different invoices.` })
+                    response_message.push({ message: `The credit_note: ${credit_note.number} can't be save because it have refund items which came from different invoices.` })
                     return
                 } else {
                     return {...credit_note, travel_items: grouped_credits_notes[credit_note.id]}
                 }
             })
-            .filter(credit_note => credit_note) // Query all credit where id in groupedItems tab and associate each credit_note with its travel_item
+            ?.filter(credit_note => credit_note) // Query all credit where id in groupedItems tab and associate each credit_note with its travel_item
 
-        const parsedData = parse(credit_notes)
+        if (credit_notes.length) {
+            const parsedData = parse(credit_notes)
+            for (const credit_note of parsedData) {
+                const zra_response = await fetch(`${process.env.ZRAURL}/vsdc/trnsSales/saveSales`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify(credit_note)
+                }).then(response => response.json())
+                console.log(zra_response?.resultCd)
+                switch (zra_response?.resultCd) {
+                    case '000':
+                        response_message.push({ message: `Credit_note successfully sent to ZRA` })
+                        break
+                    case '932':
+                        response_message.push({ message: `${zra_response?.resultMsg}` })
+                        break
+                    default:
+                        response_message.push({ message: `${zra_response?.resultMsg}` })
+                }
+            }
+        } else {
+            response_message.push({ message: `None of the credit notes you are trying to send have an associated invoice in ZRA.` })
+        }
 
-        const zra_response = await Promise.all(parsedData.map(credit_note => fetch(`${process.env.ZRAURL}/vsdc/trnsSales/saveSales`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify(credit_note)
-        }).then(response => response.json())))
-        res.send(credit_notes)
+        res.send(response_message)
     } catch (e) {
         res.send(`Error message: ${e.message}\n Error trace: ${e.stack}`)
     }
