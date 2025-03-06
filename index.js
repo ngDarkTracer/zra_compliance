@@ -20,12 +20,13 @@ const postgres = new Client({
 
 const port = process.env.PORT || 3000
 
-app.get('/invoice', async (req, res) => {
+app.post('/invoice', async (req, res) => {
+    const invoices = JSON.parse(req.body)
     try {
         const invoiceMap = []
         const response_message = []
-        const response = (await postgres.query('select invoice.*, customer_name, JSON_AGG(travel_item) as travel_items from invoice inner join travel_item on invoice.id = travel_item.id_invoice inner join customer on customer.id = invoice.id_customer group by invoice.id, customer.id having count(travel_item) > 10 limit 1')).rows
-        const parsedData = parse(response)
+        //const response = (await postgres.query('select invoice.*, customer_name, JSON_AGG(travel_item) as travel_items from invoice inner join travel_item on invoice.id = travel_item.id_invoice inner join customer on customer.id = invoice.id_customer group by invoice.id, customer.id limit 50')).rows
+        const parsedData = parse(invoices)
 
         for (const invoice of parsedData) {
             const zra_response = await fetch(`${process.env.ZRAURL}/vsdc/trnsSales/saveSales`, {
@@ -55,13 +56,16 @@ app.get('/invoice', async (req, res) => {
     } catch (e) {
         res.send(`Error message: ${e.message}\n Error trace: ${e.stack}`)
     }
+    res.send(req.body)
 })
 
-app.get('/credit_note', async (req, res) => {
+app.post('/credit_note', async (req, res) => {
+    const credit_notes = JSON.parse(req.body)
     try {
         const response_message = []
 
-        const credit_notes_ids = (await postgres.query('select id from credit_note limit 100')).rows.map(credit_note_id => credit_note_id.id)
+        //const credit_notes_ids = (await postgres.query('select id from credit_note limit 100')).rows.map(credit_note_id => credit_note_id.id)
+        const credit_notes_ids = credit_notes.map(credit_note_id => credit_note_id.id)
 
         const ticket_numbers_ids = (await postgres.query('select ARRAY_AGG(ticket_number) as ticket_numbers from air_booking where id_credit_note = ANY($1)', [credit_notes_ids])).rows[0]?.ticket_numbers
 
@@ -76,8 +80,6 @@ app.get('/credit_note', async (req, res) => {
             .filter(air_booking => air_booking.id_credit_note && air_booking.id_invoice)
 
         const invoices_ids = air_bookings.map(air_booking => air_booking.id_invoice)
-
-        //const zred_invoice = (await postgres.query('select id from invoice where id = ANY($1)', [invoices_ids])).rows.map(({id}) => id)
 
         const invoices_numbers = (await postgres.query('select id, invoice_number from invoice where id = ANY($1)', [invoices_ids])).rows
             .reduce((acc, {id, invoice_number}) => {
@@ -113,13 +115,12 @@ app.get('/credit_note', async (req, res) => {
                     },
                     body: JSON.stringify(credit_note)
                 }).then(response => response.json())
-                console.log(zra_response?.resultCd)
                 switch (zra_response?.resultCd) {
                     case '000':
-                        response_message.push({ message: `Credit_note successfully sent to ZRA` })
+                        response_message.push({ message: `Credit_note: ${credit_note?.cisInvcNo} successfully sent to ZRA` })
                         break
                     case '932':
-                        response_message.push({ message: `${zra_response?.resultMsg}` })
+                        response_message.push({ message: `One of the specified item in the credit_note: ${credit_note?.cisInvcNo} does not exist on the original invoice.` })
                         break
                     default:
                         response_message.push({ message: `${zra_response?.resultMsg}` })
@@ -128,7 +129,6 @@ app.get('/credit_note', async (req, res) => {
         } else {
             response_message.push({ message: `None of the credit notes you are trying to send have an associated invoice in ZRA.` })
         }
-
         res.send(response_message)
     } catch (e) {
         res.send(`Error message: ${e.message}\n Error trace: ${e.stack}`)
