@@ -1,4 +1,13 @@
-FROM ubuntu:latest
-LABEL authors="pro"
+FROM node:18-alpine
 
-ENTRYPOINT ["top", "-b"]
+WORKDIR /zra_compliance
+
+COPY package*.json ./
+
+RUN npm install --only=production
+
+COPY . .
+
+EXPOSE 3000
+
+CMD ["node", "server.js"]

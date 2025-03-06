@@ -22,9 +22,9 @@ const port = process.env.PORT || 3000
 
 app.post('/invoice', async (req, res) => {
     const invoices = JSON.parse(req.body)
+    const response_message = []
     try {
         const invoiceMap = []
-        const response_message = []
         //const response = (await postgres.query('select invoice.*, customer_name, JSON_AGG(travel_item) as travel_items from invoice inner join travel_item on invoice.id = travel_item.id_invoice inner join customer on customer.id = invoice.id_customer group by invoice.id, customer.id limit 50')).rows
         const parsedData = parse(invoices)
 
@@ -51,12 +51,10 @@ app.post('/invoice', async (req, res) => {
         })
 
         const ab_response = await Promise.all(queries.map(qry => postgres.query(qry.query, qry.values)))
-
-        res.send(response_message)
     } catch (e) {
         res.send(`Error message: ${e.message}\n Error trace: ${e.stack}`)
     }
-    res.send(req.body)
+    res.send(response_message)
 })
 
 app.post('/credit_note', async (req, res) => {
@@ -64,7 +62,7 @@ app.post('/credit_note', async (req, res) => {
     try {
         const response_message = []
 
-        //const credit_notes_ids = (await postgres.query('select id from credit_note limit 100')).rows.map(credit_note_id => credit_note_id.id)
+        //const credit_notes_ids = (await postgres.query('select id from credit_note')).rows.map(credit_note_id => credit_note_id.id)
         const credit_notes_ids = credit_notes.map(credit_note_id => credit_note_id.id)
 
         const ticket_numbers_ids = (await postgres.query('select ARRAY_AGG(ticket_number) as ticket_numbers from air_booking where id_credit_note = ANY($1)', [credit_notes_ids])).rows[0]?.ticket_numbers
@@ -81,15 +79,16 @@ app.post('/credit_note', async (req, res) => {
 
         const invoices_ids = air_bookings.map(air_booking => air_booking.id_invoice)
 
-        const invoices_numbers = (await postgres.query('select id, invoice_number from invoice where id = ANY($1)', [invoices_ids])).rows
-            .reduce((acc, {id, invoice_number}) => {
-                acc[id] = invoice_number
+        const invoices_numbers = (await postgres.query('select id, invoice_number, zra_invoice_id from invoice where id = ANY($1)', [invoices_ids])).rows
+            .reduce((acc, {id, invoice_number, zra_invoice_id}) => {
+                acc[id] = {invoice_number, zra_invoice_id}
                 return acc
             }, {})
 
         const reformatted_air_bookings = air_bookings.map(air_booking => ({
             ...air_booking,
-            id_invoice: invoices_numbers[air_booking.id_invoice]
+            zra_invoice_id: invoices_numbers[air_booking.id_invoice]?.zra_invoice_id,
+            id_invoice: invoices_numbers[air_booking.id_invoice]?.invoice_number
         }))
 
         const grouped_credits_notes = groupBy(reformatted_air_bookings, 'id_credit_note') // Group element by id_invoice
@@ -99,6 +98,8 @@ app.post('/credit_note', async (req, res) => {
                 if (Object.keys(groupBy(grouped_credits_notes[credit_note.id], 'id_invoice')).length > 1) {
                     response_message.push({ message: `The credit_note: ${credit_note.number} can't be save because it have refund items which came from different invoices.` })
                     return
+                } else if (!(grouped_credits_notes[credit_note.id][0]?.zra_invoice_id)) {
+                    response_message.push({ message: `The credit_note: ${credit_note.number} does not have an associated invoice in ZRA.` })
                 } else {
                     return {...credit_note, travel_items: grouped_credits_notes[credit_note.id]}
                 }
@@ -120,16 +121,17 @@ app.post('/credit_note', async (req, res) => {
                         response_message.push({ message: `Credit_note: ${credit_note?.cisInvcNo} successfully sent to ZRA` })
                         break
                     case '932':
-                        response_message.push({ message: `One of the specified item in the credit_note: ${credit_note?.cisInvcNo} does not exist on the original invoice.` })
+                        response_message.push({ message: `One of the specified item in the credit_note: ${credit_note?.cisInvcNo} does not exist on the original invoice. The credit_note can't be sent !` })
                         break
                     default:
                         response_message.push({ message: `${zra_response?.resultMsg}` })
                 }
             }
         } else {
+            response_message.length = 0
             response_message.push({ message: `None of the credit notes you are trying to send have an associated invoice in ZRA.` })
         }
-        res.send(response_message)
+        res.send(grouped_credits_notes)
     } catch (e) {
         res.send(`Error message: ${e.message}\n Error trace: ${e.stack}`)
     }

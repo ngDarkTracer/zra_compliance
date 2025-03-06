@@ -14,7 +14,7 @@ function parse(data) {
         return {
             tpin: process.env.TPIN,
             bhfId: process.env.BHFID,
-            orgInvcNo: row["invoice_number"] ? 0 : 7,// compute
+            orgInvcNo: row["invoice_number"] ? 0 : 7,
             orgSdcId: !row["invoice_number"] ? process.env.ORGSDCID : null,
             cisInvcNo: row["invoice_number"] || row["number"],
             custNm: row["customer_name"],
@@ -86,7 +86,7 @@ function parse(data) {
             modrId: "admin",
             modrNm: "admin",
             saleCtyCd: "1",
-            currencyTyCd: "ZMW",// soon
+            currencyTyCd: "USD",// soon
             exchangeRt: "1",
             destnCountryCd: "",
             dbtRsnCd: "",
