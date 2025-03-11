@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "electron": "electron electron/main.js",
+    "start": "concurrently \"nodemon index.js\" \"npm run electron\""
   },
   "keywords": [],
   "author": "",
@@ -11,13 +12,20 @@
   "description": "",
   "dependencies": {
     "@directus/sdk": "^19.0.1",
+    "@tailwindcss/cli": "^4.0.12",
     "axios": "^1.7.9",
     "directus": "^11.4.1",
     "dotenv": "^16.4.7",
+    "ejs": "^3.1.10",
     "express": "^4.21.2",
     "node-cron": "^3.0.3",
     "nodemon": "^3.1.9",
     "pg": "^8.13.1",
-    "pnpm": "^10.2.1"
+    "pnpm": "^10.2.1",
+    "tailwindcss": "^4.0.12"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "electron": "^35.0.1"
   }
 }

@@ -3,22 +3,47 @@ require('dotenv').config()
 const { Client } = require('pg')
 const { parse } = require('./parse')
 const express = require('express')
-const cron = require('node-cron')
-const {post} = require("axios");
-const {query} = require("express");
 
 const app = express()
+app.set('view engine', 'ejs')
 app.use(express.json())
 
-const postgres = new Client({
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    host: process.env.DB_HOST,
-    port: process.env.DB_PORT,
-    database: process.env.DB_DATABASE
-})
+// const postgres = new Client({
+//     user: process.env.DB_USER,
+//     password: process.env.DB_PASSWORD,
+//     host: process.env.DB_HOST,
+//     port: process.env.DB_PORT,
+//     database: process.env.DB_DATABASE
+// })
 
 const port = process.env.PORT || 3000
+
+app.get('/', (req, res) => {
+    res.render('index');
+});
+
+app.post("/submit",async (req, res) => {
+    const { username, password, abkey } = req.body;
+    const postgres = new Client({
+        user: process.env.DB_USER,
+        password: process.env.DB_PASSWORD,
+        host: process.env.DB_HOST,
+        port: process.env.DB_PORT,
+        database: abkey
+    })
+    try {
+        await postgres.connect()
+        console.log(`Connected to the database !`)
+    } catch (e) {
+        throw new Error('Your ab_key is incorrect. Please enter a valid one.')
+    }
+    const response = await postgres.query('select email from user where email = $1', [username])
+    res.send({ message: `I received this: ${username}, ${password}, ${abkey}` });
+});
+
+app.get('/home', (req, res) => {
+    res.render('home')
+})
 
 app.post('/invoice', async (req, res) => {
     const invoices = JSON.parse(req.body)
@@ -138,13 +163,13 @@ app.post('/credit_note', async (req, res) => {
 })
 
 app.listen(port, async () => {
-    console.log(`Connecting...`)
-    try {
-        await postgres.connect()
-        console.log(`Connected!`)
-    } catch (error) {
-        console.log(`Connexion error: ${error.message}`)
-    }
+    // console.log(`Connecting...`)
+    // try {
+    //     await postgres.connect()
+    //     console.log(`Connected!`)
+    // } catch (error) {
+    //     console.log(`Connexion error: ${error.message}`)
+    // }
     console.log(`Server connected. Listening on port: ${port}`)
 })
 
