@@ -14,13 +14,34 @@ app.use(express.json())
 //     host: process.env.DB_HOST,
 //     port: process.env.DB_PORT,
 //     database: process.env.DB_DATABASE
-// })
+// });
 
 const port = process.env.PORT || 3000
 
 app.get('/', (req, res) => {
     res.render('index');
 });
+
+// app.post('/invoices', async (req, res) => {
+//     const { abkey } = req.body
+//     const postgres = new Client({
+//         user: process.env.DB_USER,
+//         password: process.env.DB_PASSWORD,
+//         host: process.env.DB_HOST,
+//         port: process.env.DB_PORT,
+//         database: abkey
+//     })
+//     try {
+//         console.log(`Connecting...`)
+//         postgres.connect()
+//         console.log(`Connected !`)
+//         const response = (await postgres.query('select invoice.*, customer_name, JSON_AGG(travel_item) as travel_items from invoice inner join travel_item on invoice.id = travel_item.id_invoice inner join customer on customer.id = invoice.id_customer group by invoice.id, customer.id limit 50')).rows
+//         const parsedData = parse(response)
+//         res.send(parsedData)
+//     } catch (e) {
+//         res.send({ message: `${e.message}\n Error trace: ${e.stack}` } )
+//     }
+// });
 
 app.post("/submit",async (req, res) => {
     const { username, password, abkey } = req.body;
@@ -32,12 +53,13 @@ app.post("/submit",async (req, res) => {
         database: abkey
     })
     try {
+        console.log(`Connecting...`)
         await postgres.connect()
         console.log(`Connected to the database !`)
     } catch (e) {
         throw new Error('Your ab_key is incorrect. Please enter a valid one.')
     }
-    const response = await postgres.query('select email from user where email = $1', [username])
+
     res.send({ message: `I received this: ${username}, ${password}, ${abkey}` });
 });
 
@@ -46,11 +68,24 @@ app.get('/home', (req, res) => {
 })
 
 app.post('/invoice', async (req, res) => {
-    const invoices = JSON.parse(req.body)
+    //const invoices = JSON.parse(req.body)
+    const { abkey } = req.body
+    const postgres = new Client({
+        user: process.env.DB_USER,
+        password: process.env.DB_PASSWORD,
+        host: process.env.DB_HOST,
+        port: process.env.DB_PORT,
+        database: abkey
+    })
     const response_message = []
     try {
+
+        console.log(`Connecting...`)
+        postgres.connect()
+        console.log(`Connected !`)
+
         const invoiceMap = []
-        //const response = (await postgres.query('select invoice.*, customer_name, JSON_AGG(travel_item) as travel_items from invoice inner join travel_item on invoice.id = travel_item.id_invoice inner join customer on customer.id = invoice.id_customer group by invoice.id, customer.id limit 50')).rows
+        const invoices = (await postgres.query('select invoice.*, customer_name, JSON_AGG(travel_item) as travel_items from invoice inner join travel_item on invoice.id = travel_item.id_invoice inner join customer on customer.id = invoice.id_customer group by invoice.id, customer.id limit 50')).rows
         const parsedData = parse(invoices)
 
         for (const invoice of parsedData) {
@@ -83,12 +118,24 @@ app.post('/invoice', async (req, res) => {
 })
 
 app.post('/credit_note', async (req, res) => {
-    const credit_notes = JSON.parse(req.body)
+    //const credit_notes = JSON.parse(req.body)
+    const { abkey } = req.body
+    const postgres = new Client({
+        user: process.env.DB_USER,
+        password: process.env.DB_PASSWORD,
+        host: process.env.DB_HOST,
+        port: process.env.DB_PORT,
+        database: abkey
+    })
     try {
         const response_message = []
 
-        //const credit_notes_ids = (await postgres.query('select id from credit_note')).rows.map(credit_note_id => credit_note_id.id)
-        const credit_notes_ids = credit_notes.map(credit_note_id => credit_note_id.id)
+        console.log(`Connecting...`)
+        postgres.connect()
+        console.log(`Connected !`)
+
+        const credit_notes_ids = (await postgres.query('select id from credit_note')).rows.map(credit_note_id => credit_note_id.id)
+        //const credit_notes_ids = credit_notes.map(credit_note_id => credit_note_id.id)
 
         const ticket_numbers_ids = (await postgres.query('select ARRAY_AGG(ticket_number) as ticket_numbers from air_booking where id_credit_note = ANY($1)', [credit_notes_ids])).rows[0]?.ticket_numbers
 
@@ -156,7 +203,7 @@ app.post('/credit_note', async (req, res) => {
             response_message.length = 0
             response_message.push({ message: `None of the credit notes you are trying to send have an associated invoice in ZRA.` })
         }
-        res.send(grouped_credits_notes)
+        res.send(response_message)
     } catch (e) {
         res.send(`Error message: ${e.message}\n Error trace: ${e.stack}`)
     }

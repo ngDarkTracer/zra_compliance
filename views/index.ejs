@@ -107,23 +107,23 @@
                 isValid = false
             }
 
-            if (!isValid) {
+            if (isValid) {
                 document.querySelector('#overlay').classList.replace('hidden', 'block')
-                // try {
-                //     const response = await fetch('/submit', {
-                //         method: "POST",
-                //         headers: {
-                //             "Content-Type": "application/json"
-                //         },
-                //         body: JSON.stringify({ username, password, abkey })
-                //     }).then(response => response.json())
-                // } catch (error) {
-                //     document.querySelector('#overlay').classList.replace('block', 'hidden')
-                //     globalError.innerHTML = error.message
-                // }
-                const response = await fetch('/home', {
-                    method: 'GET'
-                }).then(response => response.json())
+                try {
+                    const response = await fetch('/submit', {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({ username, password, abkey })
+                    }).then(response => response.json())
+                    localStorage.setItem('abkey', abkey)
+                    document.querySelector('#overlay').classList.replace('block', 'hidden')
+                    location.assign('/home')
+                } catch (error) {
+                    document.querySelector('#overlay').classList.replace('block', 'hidden')
+                    globalError.innerHTML = error.message
+                }
             }
         })
     </script>
