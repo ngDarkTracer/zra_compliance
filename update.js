@@ -49,8 +49,7 @@ app.post(`/credit_note`, async (req, res) => {
         // Récupérer les ticket_numbers associés aux credit_note
         const ticket_numbers_ids = (await knex.select(knex.raw('ARRAY_AGG(ticket_number) as ticket_numbers'))
             .from('air_booking')
-            .whereIn('id_credit_note', credit_notes_ids))
-            ?.[0]?.ticket_numbers;
+            .whereIn('id_credit_note', credit_notes_ids))[0]?.ticket_numbers;
 
         const air_bookings = (await knex.select('ticket_number', knex.raw('ARRAY_AGG(ROW_TO_JSON(air_booking)) AS bookings'))
             .from('air_booking')
