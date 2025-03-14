@@ -22,27 +22,6 @@ app.get('/', (req, res) => {
     res.render('index');
 });
 
-// app.post('/invoices', async (req, res) => {
-//     const { abkey } = req.body
-//     const postgres = new Client({
-//         user: process.env.DB_USER,
-//         password: process.env.DB_PASSWORD,
-//         host: process.env.DB_HOST,
-//         port: process.env.DB_PORT,
-//         database: abkey
-//     })
-//     try {
-//         console.log(`Connecting...`)
-//         postgres.connect()
-//         console.log(`Connected !`)
-//         const response = (await postgres.query('select invoice.*, customer_name, JSON_AGG(travel_item) as travel_items from invoice inner join travel_item on invoice.id = travel_item.id_invoice inner join customer on customer.id = invoice.id_customer group by invoice.id, customer.id limit 50')).rows
-//         const parsedData = parse(response)
-//         res.send(parsedData)
-//     } catch (e) {
-//         res.send({ message: `${e.message}\n Error trace: ${e.stack}` } )
-//     }
-// });
-
 app.post("/submit",async (req, res) => {
     const { username, password, abkey } = req.body;
     const postgres = new Client({
@@ -102,7 +81,7 @@ app.post('/invoice', async (req, res) => {
                     response_message.push({ message: `Invoice: ${invoice?.cisInvcNo} created successfully` })
                     break
                 default:
-                    response_message.push({ message: `${zra_response?.resultMsg}` })
+                    response_message.push({ message: `${zra_response?.resultMsg}, invoice number: ${invoice?.cisInvcNo}` })
             }
         }
 
