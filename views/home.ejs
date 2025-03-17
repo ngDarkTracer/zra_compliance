@@ -8,7 +8,7 @@
 </head>
 <body class="bg-gray-50">
 <div class="min-h-screen flex flex-col items-center justify-center p-4">
-    <div class="bg-white rounded-lg shadow-lg w-full max-w-4xl p-6">
+    <div class="bg-white rounded-lg shadow-lg w-full max-w-6xl p-6">
         <div class="mb-8 text-center">
             <h1 class="text-3xl font-bold text-gray-800">ZRA Smart invoice</h1>
             <p class="text-gray-600 mt-2">Search by date</p>
@@ -55,7 +55,6 @@
         </form>
 
         <div class="mt-8">
-            <h2 class="text-xl font-semibold text-gray-800 mb-4">Response</h2>
             <div id="apiResponse" class="bg-gray-100 rounded-md p-4 min-h-32 border border-gray-300">
                 <p class="text-gray-500 italic text-center">The result will be displayed here !</p>
             </div>
@@ -71,6 +70,7 @@
         const startDate = document.getElementById('startDate').value;
         const endDate = document.getElementById('endDate').value;
         const receiptType = document.querySelector('input[name="receiptType"]:checked').value;
+        console.log(`receiptType => ${receiptType}`)
 
         const startDateError = document.querySelector('#start_date_error');
         const endDateError = document.querySelector('#end_date_error');
@@ -112,12 +112,12 @@
                     headers: {
                         'Content-type': 'application/json'
                     },
-                    body: JSON.stringify({abkey: localStorage.getItem('abkey')})
+                    body: JSON.stringify({ startDate, endDate })
                 }).then(response => response.json())
                 responseDiv.innerHTML = JSON.stringify(response);
                 document.querySelector('button[type="submit"]').disabled = false
             } catch (e) {
-                responseDiv.innerHTML = 'Error while sending invoices'
+                responseDiv.innerHTML = 'Error while retrieving invoices'
                 document.querySelector('button[type="submit"]').disabled = false
             }
         }

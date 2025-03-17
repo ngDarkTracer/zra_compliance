@@ -1,8 +1,11 @@
 require('dotenv').config()
 
 const express = require('express')
+const {Client} = require("pg");
+const e = require("express");
 const app = express()
 app.use(express.json())
+app.set('view engine', 'ejs')
 
 const knex = require('knex')({
     client: 'pg',
@@ -17,19 +20,26 @@ const knex = require('knex')({
 
 const port = process.env.PORT || 3000
 
-app.post('/invoice/:id?', async (req, res) => {
-    const { id } = req.params
+app.get('/', (req, res) => {
+    res.render('index');
+});
+
+app.get('/home', (req, res) => {
+    res.render('home')
+})
+
+app.post('/invoice', async (req, res) => {
     const { startDate, endDate } = req.body
     try {
         res.json(await knex.select('invoice.id', 'invoice.invoice_number', 'invoice.creation_date', 'invoice.due_date', 'invoice.amount','customer.customer_name')
             .from('invoice')
             .modify(query => {
-                id && query.where({['invoice.id']: id})
                 query.whereBetween('creation_date', [startDate, endDate])
             })
             .join('travel_item', 'invoice.id', 'travel_item.id_invoice')
             .join('customer', 'customer.id', 'invoice.id_customer')
             .groupBy('invoice.id', 'customer.id')
+            .limit(50)
             .select(knex.raw('JSON_AGG(travel_item) as travel_items')))
     } catch (error) {
         res.status(500).end(error.message)
@@ -108,8 +118,20 @@ app.post(`/credit_note`, async (req, res) => {
                     return { ...credit_note, travel_items: grouped_credits_notes[credit_note.id] };
                 }
             })?.filter(credit_note => credit_note);
-
         res.json({ credit_notes, response_message })
+    } catch (error) {
+        res.status(500).end(error.message)
+    }
+})
+
+app.patch('/update', async (req, res) => {
+    const { table, content } = req.body
+    let fieldName = (table === 'invoice') ? 'invoice_number' : 'number'
+    try {
+        res.json(await Promise.all(content.map(query =>
+            knex.update(`${table}`, { zra_id: query.value })
+                .where({ [fieldName]: query?.id })
+        )))
     } catch (error) {
         res.status(500).end(error.message)
     }

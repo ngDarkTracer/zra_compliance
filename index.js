@@ -8,63 +8,28 @@ const app = express()
 app.set('view engine', 'ejs')
 app.use(express.json())
 
-// const postgres = new Client({
-//     user: process.env.DB_USER,
-//     password: process.env.DB_PASSWORD,
-//     host: process.env.DB_HOST,
-//     port: process.env.DB_PORT,
-//     database: process.env.DB_DATABASE
-// });
-
 const port = process.env.PORT || 3000
 
-app.get('/', (req, res) => {
-    res.render('index');
-});
-
-app.post("/submit",async (req, res) => {
-    const { username, password, abkey } = req.body;
-    const postgres = new Client({
-        user: process.env.DB_USER,
-        password: process.env.DB_PASSWORD,
-        host: process.env.DB_HOST,
-        port: process.env.DB_PORT,
-        database: abkey
-    })
-    try {
-        console.log(`Connecting...`)
-        await postgres.connect()
-        console.log(`Connected to the database !`)
-    } catch (e) {
-        throw new Error('Your ab_key is incorrect. Please enter a valid one.')
-    }
-
-    res.send({ message: `I received this: ${username}, ${password}, ${abkey}` });
-});
+// app.get('/', (req, res) => {
+//     res.render('index');
+// });
 
 app.get('/home', (req, res) => {
     res.render('home')
 })
 
-app.post('/invoice', async (req, res) => {
-    //const invoices = JSON.parse(req.body)
-    const { abkey } = req.body
-    const postgres = new Client({
-        user: process.env.DB_USER,
-        password: process.env.DB_PASSWORD,
-        host: process.env.DB_HOST,
-        port: process.env.DB_PORT,
-        database: abkey
-    })
+getInvoice = async (startDate, endDate) => {
     const response_message = []
     try {
+        const invoices = await fetch('/credit_note', {
+            method: 'GET',
+            headers: {
+                'content-type': 'application/json'
+            },
+            body: JSON.stringify({ startDate, endDate })
+        })
 
-        console.log(`Connecting...`)
-        postgres.connect()
-        console.log(`Connected !`)
-
-        const invoiceMap = []
-        const invoices = (await postgres.query('select invoice.*, customer_name, JSON_AGG(travel_item) as travel_items from invoice inner join travel_item on invoice.id = travel_item.id_invoice inner join customer on customer.id = invoice.id_customer group by invoice.id, customer.id limit 50')).rows
+        const content = []
         const parsedData = parse(invoices)
 
         for (const invoice of parsedData) {
@@ -77,7 +42,7 @@ app.post('/invoice', async (req, res) => {
             }).then(response => response.json())
             switch (zra_response?.resultCd) {
                 case '000':
-                    invoiceMap.push({ ab_invoice_number: invoice?.cisInvcNo, zra_invoice: zra_response?.data?.rcptNo })
+                    content.push({ id: invoice?.cisInvcNo, value: zra_response?.data?.rcptNo })
                     response_message.push({ message: `Invoice: ${invoice?.cisInvcNo} created successfully` })
                     break
                 default:
@@ -85,78 +50,32 @@ app.post('/invoice', async (req, res) => {
             }
         }
 
-        const queries = invoiceMap?.map(({ab_invoice_number, zra_invoice}) => {
-            return { query: `update invoice set zra_invoice_id = $1 where invoice_number = $2`, values: [zra_invoice, ab_invoice_number]}
-        })
-
-        const ab_response = await Promise.all(queries.map(qry => postgres.query(qry.query, qry.values)))
-    } catch (e) {
-        res.send(`Error message: ${e.message}\n Error trace: ${e.stack}`)
-    }
-    res.send(response_message)
-})
-
-app.post('/credit_note', async (req, res) => {
-    //const credit_notes = JSON.parse(req.body)
-    const { abkey } = req.body
-    const postgres = new Client({
-        user: process.env.DB_USER,
-        password: process.env.DB_PASSWORD,
-        host: process.env.DB_HOST,
-        port: process.env.DB_PORT,
-        database: abkey
-    })
-    try {
-        const response_message = []
-
-        console.log(`Connecting...`)
-        postgres.connect()
-        console.log(`Connected !`)
-
-        const credit_notes_ids = (await postgres.query('select id from credit_note')).rows.map(credit_note_id => credit_note_id.id)
-        //const credit_notes_ids = credit_notes.map(credit_note_id => credit_note_id.id)
-
-        const ticket_numbers_ids = (await postgres.query('select ARRAY_AGG(ticket_number) as ticket_numbers from air_booking where id_credit_note = ANY($1)', [credit_notes_ids])).rows[0]?.ticket_numbers
-
-        const air_bookings = (await postgres.query('SELECT ticket_number, ARRAY_AGG(ROW_TO_JSON(air_booking)) AS bookings FROM air_booking WHERE ticket_number = ANY($1) GROUP BY ticket_number HAVING COUNT(*) > 1', [ticket_numbers_ids]))?.rows.map((air_booking) => {
-            return {...air_booking, bookings: air_booking?.bookings?.filter(travel_item => (travel_item?.id_invoice || travel_item?.id_credit_note))} // Remove item which has an empty id_invoice and an empty credit_note
-        })
-            .reduce((acc, air_booking) => {
-                let linkedInvoice = air_booking.bookings.find(ab => ab.id_invoice)
-                acc.push(...air_booking.bookings.map(ab => ({...ab, id:linkedInvoice?.id, id_invoice: linkedInvoice?.id_invoice || ab.id_invoice})))
-                return acc
-            }, [])
-            .filter(air_booking => air_booking.id_credit_note && air_booking.id_invoice)
-
-        const invoices_ids = air_bookings.map(air_booking => air_booking.id_invoice)
-
-        const invoices_numbers = (await postgres.query('select id, invoice_number, zra_invoice_id from invoice where id = ANY($1)', [invoices_ids])).rows
-            .reduce((acc, {id, invoice_number, zra_invoice_id}) => {
-                acc[id] = {invoice_number, zra_invoice_id}
-                return acc
-            }, {})
-
-        const reformatted_air_bookings = air_bookings.map(air_booking => ({
-            ...air_booking,
-            zra_invoice_id: invoices_numbers[air_booking.id_invoice]?.zra_invoice_id,
-            id_invoice: invoices_numbers[air_booking.id_invoice]?.invoice_number
-        }))
-
-        const grouped_credits_notes = groupBy(reformatted_air_bookings, 'id_credit_note') // Group element by id_invoice
-
-        const credit_notes = (await postgres.query('select * from credit_note where id = ANY($1)', [Object.keys(grouped_credits_notes)])).rows
-            ?.map(credit_note => {
-                if (Object.keys(groupBy(grouped_credits_notes[credit_note.id], 'id_invoice')).length > 1) {
-                    response_message.push({ message: `The credit_note: ${credit_note.number} can't be save because it have refund items which came from different invoices.` })
-                    return
-                } else if (!(grouped_credits_notes[credit_note.id][0]?.zra_invoice_id)) {
-                    response_message.push({ message: `The credit_note: ${credit_note.number} does not have an associated invoice in ZRA.` })
-                } else {
-                    return {...credit_note, travel_items: grouped_credits_notes[credit_note.id]}
-                }
+        if (content.length) {
+            const updateResponse = await fetch('/update', {
+                method: 'PATCH',
+                headers: {
+                    'content-type': 'application/json'
+                },
+                body: JSON.stringify({ table: 'invoice', content })
             })
-            ?.filter(credit_note => credit_note) // Query all credit where id in groupedItems tab and associate each credit_note with its travel_item
+        }
+    } catch (error) {
+        //res.send(`Error message: ${e.message}\n Error trace: ${e.stack}`)
+    }
+    //res.send(response_message)
+}
 
+getCreditNote = async (startDate, endDate) => {
+    try {
+        const { credit_notes, _response_message } = await fetch('/credit_note', {
+            method: 'GET',
+            headers: {
+                'content-type': 'application/json'
+            },
+            body: JSON.stringify({ startDate, endDate })
+        })
+        const content = []
+        const response_message = []
         if (credit_notes.length) {
             const parsedData = parse(credit_notes)
             for (const credit_note of parsedData) {
@@ -182,20 +101,22 @@ app.post('/credit_note', async (req, res) => {
             response_message.length = 0
             response_message.push({ message: `None of the credit notes you are trying to send have an associated invoice in ZRA.` })
         }
-        res.send(response_message)
-    } catch (e) {
-        res.send(`Error message: ${e.message}\n Error trace: ${e.stack}`)
+        if (content.length) {
+            const updateResponse = await fetch('/update', {
+                method: 'PATCH',
+                headers: {
+                    'content-type': 'application/json'
+                },
+                body: JSON.stringify({ table: 'credit_note', content })
+            })
+        }
+        //res.send(response_message)
+    } catch (error) {
+        //res.send(`Error message: ${e.message}\n Error trace: ${e.stack}`)
     }
-})
+}
 
 app.listen(port, async () => {
-    // console.log(`Connecting...`)
-    // try {
-    //     await postgres.connect()
-    //     console.log(`Connected!`)
-    // } catch (error) {
-    //     console.log(`Connexion error: ${error.message}`)
-    // }
     console.log(`Server connected. Listening on port: ${port}`)
 })
 
