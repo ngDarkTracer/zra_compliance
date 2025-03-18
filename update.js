@@ -1,10 +1,11 @@
 require('dotenv').config()
 
 const express = require('express')
-const {Client} = require("pg");
 const e = require("express");
 const app = express()
+
 app.use(express.json())
+
 app.set('view engine', 'ejs')
 
 const knex = require('knex')({
@@ -31,11 +32,12 @@ app.get('/home', (req, res) => {
 app.post('/invoice', async (req, res) => {
     const { startDate, endDate } = req.body
     try {
-        res.json(await knex.select('invoice.id', 'invoice.invoice_number', 'invoice.creation_date', 'invoice.due_date', 'invoice.amount','customer.customer_name')
+        res.json(await knex.select('invoice.*','customer.customer_name')
             .from('invoice')
             .modify(query => {
                 query.whereBetween('creation_date', [startDate, endDate])
             })
+            .whereNull('zra_id')
             .join('travel_item', 'invoice.id', 'travel_item.id_invoice')
             .join('customer', 'customer.id', 'invoice.id_customer')
             .groupBy('invoice.id', 'customer.id')
@@ -103,25 +105,21 @@ app.post(`/credit_note`, async (req, res) => {
         const grouped_credits_notes = groupBy(reformatted_air_bookings, 'id_credit_note');
 
         // Récupérer les notes de crédit correspondantes
-        const credit_notes = (await knex.select('credit_note.id', 'credit_note.number', 'credit_note.creation_date', 'credit_note.amount','customer.customer_name')
+        const credit_notes = (await knex.select('credit_note.id', 'credit_note.number', 'credit_note.creation_date', 'credit_note.amount', 'credit_note.status', 'credit_note.balance','customer.customer_name')
             .from('credit_note')
             .join('customer', 'customer.id', 'credit_note.id_customer')
             .groupBy('credit_note.id', 'customer.id')
             .whereIn('credit_note.id', Object.keys(grouped_credits_notes)))
-            ?.map(credit_note => {
-                if (Object.keys(groupBy(grouped_credits_notes[credit_note.id], 'id_invoice')).length > 1) {
-                    response_message.push({ message: `The credit_note: ${credit_note.number} can't be saved because it has refund items from different invoices.` });
-                    return;
-                } else if (!(grouped_credits_notes[credit_note.id][0]?.zra_invoice_id)) {
-                    response_message.push({ message: `The credit_note: ${credit_note.number} does not have an associated invoice in ZRA.` });
-                } else {
-                    return { ...credit_note, travel_items: grouped_credits_notes[credit_note.id] };
-                }
-            })?.filter(credit_note => credit_note);
+            ?.map(credit_note => credit_note)?.filter(credit_note => credit_note);
         res.json({ credit_notes, response_message })
     } catch (error) {
         res.status(500).end(error.message)
     }
+})
+
+app.get('/taxes', async (req, res) => {
+    res.json(await knex.select('*')
+        .from('tax'))
 })
 
 app.patch('/update', async (req, res) => {

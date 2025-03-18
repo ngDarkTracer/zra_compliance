@@ -31,7 +31,6 @@ getInvoice = async (startDate, endDate) => {
 
         const content = []
         const parsedData = parse(invoices)
-
         for (const invoice of parsedData) {
             const zra_response = await fetch(`${process.env.ZRAURL}/vsdc/trnsSales/saveSales`, {
                 method: "POST",
@@ -62,7 +61,6 @@ getInvoice = async (startDate, endDate) => {
     } catch (error) {
         //res.send(`Error message: ${e.message}\n Error trace: ${e.stack}`)
     }
-    //res.send(response_message)
 }
 
 getCreditNote = async (startDate, endDate) => {
@@ -86,7 +84,7 @@ getCreditNote = async (startDate, endDate) => {
                     },
                     body: JSON.stringify(credit_note)
                 }).then(response => response.json())
-                switch (zra_response?.resultCd) {
+                switch (zra_response.resultCd) {
                     case '000':
                         response_message.push({ message: `Credit_note: ${credit_note?.cisInvcNo} successfully sent to ZRA` })
                         break
@@ -94,7 +92,7 @@ getCreditNote = async (startDate, endDate) => {
                         response_message.push({ message: `One of the specified item in the credit_note: ${credit_note?.cisInvcNo} does not exist on the original invoice. The credit_note can't be sent !` })
                         break
                     default:
-                        response_message.push({ message: `${zra_response?.resultMsg}` })
+                        response_message.push({ message: `${zra_response.resultMsg}` })
                 }
             }
         } else {
@@ -110,7 +108,6 @@ getCreditNote = async (startDate, endDate) => {
                 body: JSON.stringify({ table: 'credit_note', content })
             })
         }
-        //res.send(response_message)
     } catch (error) {
         //res.send(`Error message: ${e.message}\n Error trace: ${e.stack}`)
     }
