@@ -7,6 +7,33 @@
     <script src="https://unpkg.com/@tailwindcss/browser@4"></script>
 </head>
 <body class="bg-gray-50">
+<style>
+    .spinner {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        position: relative;
+        animation: rotate 1s linear infinite;
+    }
+
+    .spinner::before {
+        content: "";
+        box-sizing: border-box;
+        position: absolute;
+        inset: 0px;
+        border-radius: 50%;
+        border: 3px solid transparent;
+        border-top-color: #FF3E3E;
+        border-right-color: #4285F4;
+        border-bottom-color: #34A853;
+        border-left-color: #FBBC05;
+    }
+
+    @keyframes rotate {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+</style>
 <div class="min-h-screen flex flex-col items-center justify-center p-4">
     <div class="bg-white w-full h-screen p-6">
         <div class="mb-8 text-center">
@@ -15,22 +42,27 @@
         </div>
 
         <form id="receiptForm" class="space-y-6">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                    <label for="startDate" class="block text-sm font-medium text-gray-700 mb-1">Start date</label>
-                    <input type="date" id="startDate" name="startDate"
-                           class="w-full px-4 py-2 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <div id="start_date_error" style="color: #cc3737; height: 25px;"></div>
-                </div>
-                <div>
-                    <label for="endDate" class="block text-sm font-medium text-gray-700 mb-1">End date</label>
-                    <input type="date" id="endDate" name="endDate"
-                           class="w-full px-4 py-2 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <div id="end_date_error" style="color: #cc3737; height: 25px;"></div>
-                </div>
-            </div>
-
             <div>
+                <div class="flex space-x-4">
+                    <div class="flex flex-col items-start">
+                        <label for="startDate" class="block text-sm font-medium text-gray-700 mb-1">Start date</label>
+                        <input type="date" id="startDate" name="startDate"
+                               class="w-full px-4 py-2 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <div id="start_date_error" style="color: #cc3737; height: 25px;"></div>
+                    </div>
+                    <div class="flex flex-col items-start">
+                        <label for="endDate" class="block text-sm font-medium text-gray-700 mb-1">End date</label>
+                        <input type="date" id="endDate" name="endDate"
+                               class="w-full px-4 py-2 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <div id="end_date_error" style="color: #cc3737; height: 25px;"></div>
+                    </div>
+                    <div class="flex flex-col justify-center">
+                        <button type="submit"
+                                class="bg-[#438eb9] hover:bg-[#2f6787] text-white font-medium py-2 px-6 rounded-sm transition duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                            Retrieve
+                        </button>
+                    </div>
+                </div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Receipt type</label>
                 <div class="flex space-x-4">
                     <div class="flex items-center">
@@ -44,13 +76,6 @@
                         <label for="credit_note" class="ml-2 text-gray-700">Credit Note</label>
                     </div>
                 </div>
-            </div>
-
-            <div class="flex justify-center">
-                <button type="submit"
-                        class="bg-[#438eb9] hover:bg-[#2f6787] text-white font-medium py-2 px-6 rounded-sm transition duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
-                    Retrieve
-                </button>
             </div>
         </form>
 
@@ -81,12 +106,16 @@
                         </th>
                     </tr>
                 </thead>
-                    <tbody id="table_body">
+                <tbody id="table_body" class="overflow-scroll">
+
                 </tbody>
             </table>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="w-screen flex justify-center p-10 hidden" id="spinner_container">
+                <div class="spinner"></div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 block" id="action">
                 <div class="mt-3 flex flex-wrap items-center -space-x-px text-black">
-                    <div class="mr-3"><select class="border p-2 text-red-800 hover:border-blue-300 focus:outline-none" name="pagination" id="cars">
+                    <div class="mr-3"><select class="border p-2 text-red-800 hover:border-blue-300 focus:outline-none" name="pagination" onchange="reload(event)">
                             <option value="10">10 per pages</option>
                             <option value="15">15 per pages</option>
                             <option value="20">20 per pages</option>
@@ -95,16 +124,16 @@
                             <option value="100">100 per pages</option>
                         </select></div>
                     <div>
-                        <button disabled="" class="cursor-not-allowed opacity-50"><span class="sr-only">Previous</span>
+                        <button class="opacity-50" onclick="moveToPage('previous')"><span class="sr-only">Previous</span>
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"
                                  class="w-3 scale-x-100 rotate-90 fill-gray-300">
                                 <path d="M137.4 374.6c12.5 12.5 32.8 12.5 45.3 0l128-128c9.2-9.2 11.9-22.9 6.9-34.9s-16.6-19.8-29.6-19.8L32 192c-12.9 0-24.6 7.8-29.6 19.8s-2.2 25.7 6.9 34.9l128 128z"></path>
                             </svg>
                         </button>
                     </div>
-                    <div class="-mt-1 px-3">1-57</div>
+                    <div class="-mt-1 px-3"><span id="current_page_number">1</span>-<span id="total_page_number">1</span></div>
                     <div>
-                        <button disabled="" class="cursor-not-allowed opacity-50"><span class="sr-only">Next</span>
+                        <button class="opacity-50" onclick="moveToPage('next')"><span class="sr-only">Next</span>
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"
                                  class="mr-3 w-3 scale-x-100 -rotate-90 fill-gray-300">
                                 <path d="M137.4 374.6c12.5 12.5 32.8 12.5 45.3 0l128-128c9.2-9.2 11.9-22.9 6.9-34.9s-16.6-19.8-29.6-19.8L32 192c-12.9 0-24.6 7.8-29.6 19.8s-2.2 25.7 6.9 34.9l128 128z"></path>
@@ -123,22 +152,21 @@
 </div>
 
 <script>
+    let pageSize = 10;
+    let pageNumber = 1;
+    let total = 0;
+
+    const current_page = document.querySelector('#current_page_number');
+    const total_page = document.querySelector('#total_page_number');
+    const spinner = document.querySelector('#spinner_container');
+    const action_buttons = document.querySelector('#action');
+
     document.getElementById('receiptForm').addEventListener('submit', async (event) => {
         event.preventDefault();
-
         let isValid = false;
-
         const startDate = document.getElementById('startDate').value;
         const endDate = document.getElementById('endDate').value;
         const receiptType = document.querySelector('input[name="receiptType"]:checked').value;
-        const invoiceTable = {
-            header: ['Date', 'Invoice number#', 'Customer', 'Status', 'Due date', 'Amount', 'Balance'],
-            fields: ['creation_date', 'invoice_number', 'customer_name', 'status', 'due_date', 'amount', 'balance']
-        }
-        const creditNoteTable = {
-            header: ['Date', 'CN Number#', 'Customer', 'Status', 'Amount', 'Balance'],
-            fields: ['creation_date', 'number', 'customer_name', 'status', 'amount', 'balance']
-        }
 
         const startDateError = document.querySelector('#start_date_error');
         const endDateError = document.querySelector('#end_date_error');
@@ -170,71 +198,91 @@
         }
 
         if (isValid) {
-            document.querySelector('button[type="submit"]').disabled = true
-
-            const tableHeader = document.getElementById('table_header');
-            const tableBody = document.getElementById('table_body');
-            const responseDiv = document.getElementById('apiResponse');
-            tableHeader.innerHTML = ''
-
-            if (receiptType === 'invoice') {
-                invoiceTable.header.forEach(header => {
-                    tableHeader.innerHTML += `<th scope="col" class="text-blue-550 p-4 border-none font-semibold cursor-pointer">
-                        <span class="flex items-center">${header}</span>
-                    </th>`
-                })
-            } else {
-                creditNoteTable.header.forEach(header => {
-                    tableHeader.innerHTML += `<th scope="col" class="text-blue-550 p-4 border-none font-semibold cursor-pointer">
-                        <span class="flex items-center">${header}</span>
-                    </th>`
-                })
-            }
-
-            try {
-                const response = await fetch(`/${receiptType}`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-type': 'application/json'
-                    },
-                    body: JSON.stringify({ startDate, endDate })
-                }).then(response => response.json())
-                tableBody.innerHTML = ''
-
-                if (receiptType === 'invoice') {
-                    localStorage.setItem('ab_data', JSON.stringify(response))
-                    response.forEach(record => {
-                        const tr = document.createElement("tr");
-                        tr.className = "whitespace-nowrap border-b border-gray-200 odd:bg-white even:bg-slate-50 hover:bg-black/7 p-6";
-                        invoiceTable.fields.forEach(field => {
-                            const td = document.createElement("td");
-                            td.className = "cursor-pointer py-2 px-4 font-normal text-black";
-                            td.textContent = record[field];
-                            tr.appendChild(td);
-                        });
-                        tableBody.appendChild(tr);
-                    })
-                } else if (response.credit_notes.length) {
-                    localStorage.setItem('ab_data', JSON.stringify(response.credit_notes))
-                    response?.credit_notes.forEach(record => {
-                        const tr = document.createElement("tr");
-                        tr.className = "whitespace-nowrap border-b border-gray-200 odd:bg-white even:bg-slate-50 hover:bg-black/7 p-6";
-                        creditNoteTable.fields.forEach(field => {
-                            const td = document.createElement("td");
-                            td.className = "cursor-pointer py-2 px-4 font-normal text-black";
-                            td.textContent = record[field];
-                            tr.appendChild(td);
-                        });
-                        tableBody.appendChild(tr);
-                    })
-                }
-                document.querySelector('button[type="submit"]').disabled = false
-            } catch (e) {
-                //responseDiv.innerHTML = 'Error while retrieving invoices'
-                document.querySelector('button[type="submit"]').disabled = false
-            }
+            pageNumber = 1;
+            current_page.innerHTML = `${pageNumber}`
+            await retrieve(receiptType, startDate, endDate, pageSize, 1)
         }
     });
+
+    async function retrieve(receiptType, startDate, endDate, pageSize, pageNumber) {
+        spinner.classList.replace('hidden', 'block')
+        action_buttons.classList.replace('block', 'hidden')
+        document.querySelector('button[type="submit"]').disabled = true
+        const tableHeader = document.getElementById('table_header');
+        const tableBody = document.getElementById('table_body');
+        tableHeader.innerHTML = '';
+        tableBody.innerHTML = '';
+
+        const invoiceTable = {
+            header: ['Date', 'Invoice number#', 'Customer', 'Status', 'Due date', 'Amount', 'Balance'],
+            fields: ['creation_date', 'invoice_number', 'customer_name', 'status', 'due_date', 'amount', 'balance']
+        }
+        const creditNoteTable = {
+            header: ['Date', 'CN Number#', 'Customer', 'Status', 'Amount', 'Balance'],
+            fields: ['creation_date', 'number', 'customer_name', 'status', 'amount', 'balance']
+        }
+
+        if (receiptType === 'invoice') {
+            invoiceTable.header.forEach(header => {
+                tableHeader.innerHTML += `<th scope="col" class="text-blue-550 p-4 border-none font-semibold cursor-pointer">
+                        <span class="flex items-center">${header}</span>
+                    </th>`
+            })
+        } else {
+            creditNoteTable.header.forEach(header => {
+                tableHeader.innerHTML += `<th scope="col" class="text-blue-550 p-4 border-none font-semibold cursor-pointer">
+                        <span class="flex items-center">${header}</span>
+                    </th>`
+            })
+        }
+
+        try {
+            const response = await fetch(`/${receiptType}`, {
+                method: 'POST',
+                headers: {
+                    'Content-type': 'application/json'
+                },
+                body: JSON.stringify({ startDate, endDate, pageSize, pageNumber })
+            }).then(response => response.json())
+            total = response.total
+            if (receiptType === 'invoice' && response.invoices?.length) {
+                localStorage.setItem('ab_data', JSON.stringify(response))
+                total_page.innerHTML = `${Math.ceil(total / pageSize)}`
+                response.invoices.forEach(record => {
+                    const tr = document.createElement("tr");
+                    tr.className = "whitespace-nowrap border-b border-gray-200 odd:bg-white even:bg-slate-50 hover:bg-black/7 p-6";
+                    invoiceTable.fields.forEach(field => {
+                        const td = document.createElement("td");
+                        td.className = "cursor-pointer py-2 px-4 font-normal text-black";
+                        td.textContent = record[field];
+                        tr.appendChild(td);
+                    });
+                    spinner.classList.replace('block', 'hidden')
+                    action_buttons.classList.replace('hidden', 'block')
+                    tableBody.appendChild(tr);
+                })
+            } else if (response.credit_notes.length) {
+                localStorage.setItem('ab_data', JSON.stringify(response.credit_notes))
+                total_page.innerHTML = `${Math.ceil(total / pageSize)}`
+                response?.credit_notes.forEach(record => {
+                    const tr = document.createElement("tr");
+                    tr.className = "whitespace-nowrap border-b border-gray-200 odd:bg-white even:bg-slate-50 hover:bg-black/7 p-6";
+                    creditNoteTable.fields.forEach(field => {
+                        const td = document.createElement("td");
+                        td.className = "cursor-pointer py-2 px-4 font-normal text-black";
+                        td.textContent = record[field];
+                        tr.appendChild(td);
+                    });
+                    spinner.classList.replace('block', 'hidden')
+                    action_buttons.classList.replace('hidden', 'block')
+                    tableBody.appendChild(tr);
+                })
+            }
+            document.querySelector('button[type="submit"]').disabled = false
+        } catch (e) {
+            document.querySelector('button[type="submit"]').disabled = false
+        }
+    }
 
     function isMoreThan30Days(inputDate) {
         const today = new Date();
@@ -247,6 +295,29 @@
     function send() {
         const items = localStorage.getItem('ab_data')
         console.log(`Items ===> ${items}`)
+    }
+
+    function reload(event) {
+        pageSize = event.target.value;
+        const startDate = document.getElementById('startDate').value;
+        const endDate = document.getElementById('endDate').value;
+        const receiptType = document.querySelector('input[name="receiptType"]:checked').value;
+        retrieve(receiptType, startDate, endDate, pageSize, pageNumber)
+    }
+
+    function moveToPage(type) {
+        const startDate = document.getElementById('startDate').value;
+        const endDate = document.getElementById('endDate').value;
+        const receiptType = document.querySelector('input[name="receiptType"]:checked').value;
+        if (type === 'next' && total !== 0 && pageNumber < Math.ceil(total/pageSize)) {
+            pageNumber++
+            current_page.innerHTML = `${pageNumber}`
+            retrieve(receiptType, startDate, endDate, pageSize, pageNumber)
+        } else if (type === 'previous' && pageNumber > 1) {
+            pageNumber--
+            current_page.innerHTML = `${pageNumber}`
+            retrieve(receiptType, startDate, endDate, pageSize, pageNumber)
+        }
     }
 </script>
 </body>

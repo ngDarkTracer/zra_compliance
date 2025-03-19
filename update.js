@@ -30,9 +30,9 @@ app.get('/home', (req, res) => {
 })
 
 app.post('/invoice', async (req, res) => {
-    const { startDate, endDate } = req.body
+    const { startDate, endDate, pageSize, pageNumber } = req.body
     try {
-        res.json(await knex.select('invoice.*','customer.customer_name')
+        const invoices = await knex.select('invoice.*','customer.customer_name')
             .from('invoice')
             .modify(query => {
                 query.whereBetween('creation_date', [startDate, endDate])
@@ -41,20 +41,25 @@ app.post('/invoice', async (req, res) => {
             .join('travel_item', 'invoice.id', 'travel_item.id_invoice')
             .join('customer', 'customer.id', 'invoice.id_customer')
             .groupBy('invoice.id', 'customer.id')
-            .limit(50)
-            .select(knex.raw('JSON_AGG(travel_item) as travel_items')))
+            .limit(pageSize)
+            .offset(pageSize * (pageNumber - 1))
+            .select(knex.raw('JSON_AGG(travel_item) as travel_items'))
+
+        const total = (await knex.count('* as total').from('invoice').whereNull('zra_id').whereBetween('creation_date', [startDate, endDate]))[0].total || 0;
+        res.json({invoices, total})
     } catch (error) {
         res.status(500).end(error.message)
     }
 })
 
 app.post(`/credit_note`, async (req, res) => {
-    const { startDate, endDate } = req.body
+    const { startDate, endDate, pageSize, pageNumber } = req.body
     const response_message = []
     try {
         // Récupérer les IDs des credit_note
         const credit_notes_ids = (await knex.select('id')
             .from('credit_note')
+            .whereNull('zra_id')
             .whereBetween('creation_date', [startDate, endDate]))
             .map(credit_note => credit_note.id);
 
@@ -104,14 +109,21 @@ app.post(`/credit_note`, async (req, res) => {
         // Regrouper par ID de note de crédit
         const grouped_credits_notes = groupBy(reformatted_air_bookings, 'id_credit_note');
 
+        const total = (await knex.count('* as total')
+            .from('credit_note')
+            .whereNull('zra_id')
+            .whereIn('id', Object.keys(grouped_credits_notes)))[0].total || 0
+
         // Récupérer les notes de crédit correspondantes
         const credit_notes = (await knex.select('credit_note.id', 'credit_note.number', 'credit_note.creation_date', 'credit_note.amount', 'credit_note.status', 'credit_note.balance','customer.customer_name')
             .from('credit_note')
             .join('customer', 'customer.id', 'credit_note.id_customer')
             .groupBy('credit_note.id', 'customer.id')
-            .whereIn('credit_note.id', Object.keys(grouped_credits_notes)))
+            .whereIn('credit_note.id', Object.keys(grouped_credits_notes))
+            .limit(pageSize)
+            .offset(pageSize * (pageNumber - 1)))
             ?.map(credit_note => credit_note)?.filter(credit_note => credit_note);
-        res.json({ credit_notes, response_message })
+        res.json({ credit_notes, response_message, total })
     } catch (error) {
         res.status(500).end(error.message)
     }
