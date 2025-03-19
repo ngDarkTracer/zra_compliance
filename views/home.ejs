@@ -107,12 +107,12 @@
                     </tr>
                 </thead>
                 <tbody id="table_body" class="overflow-scroll">
-
                 </tbody>
             </table>
             <div class="w-screen flex justify-center p-10 hidden" id="spinner_container">
                 <div class="spinner"></div>
             </div>
+            <div id="query_error" class="w-screen flex justify-center text-red-600 my-3"></div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 block" id="action">
                 <div class="mt-3 flex flex-wrap items-center -space-x-px text-black">
                     <div class="mr-3"><select class="border p-2 text-red-800 hover:border-blue-300 focus:outline-none" name="pagination" onchange="reload(event)">
@@ -160,6 +160,7 @@
     const total_page = document.querySelector('#total_page_number');
     const spinner = document.querySelector('#spinner_container');
     const action_buttons = document.querySelector('#action');
+    const queryError = document.querySelector('#query_error');
 
     document.getElementById('receiptForm').addEventListener('submit', async (event) => {
         event.preventDefault();
@@ -212,6 +213,7 @@
         const tableBody = document.getElementById('table_body');
         tableHeader.innerHTML = '';
         tableBody.innerHTML = '';
+        queryError.innerHTML = '';
 
         const invoiceTable = {
             header: ['Date', 'Invoice number#', 'Customer', 'Status', 'Due date', 'Amount', 'Balance'],
@@ -245,7 +247,14 @@
                 body: JSON.stringify({ startDate, endDate, pageSize, pageNumber })
             }).then(response => response.json())
             total = response.total
-            if (receiptType === 'invoice' && response.invoices?.length) {
+
+            if (!response.invoices?.length && !response.credit_notes?.length) {
+                eval('debugger')
+                queryError.innerHTML = `No ${receiptType} found`
+                spinner.classList.replace('block', 'hidden')
+            }
+
+            if (receiptType === 'invoice' && response.invoices.length) {
                 localStorage.setItem('ab_data', JSON.stringify(response))
                 total_page.innerHTML = `${Math.ceil(total / pageSize)}`
                 response.invoices.forEach(record => {
@@ -261,7 +270,7 @@
                     action_buttons.classList.replace('hidden', 'block')
                     tableBody.appendChild(tr);
                 })
-            } else if (response.credit_notes.length) {
+            } else if (response.credit_notes?.length) {
                 localStorage.setItem('ab_data', JSON.stringify(response.credit_notes))
                 total_page.innerHTML = `${Math.ceil(total / pageSize)}`
                 response?.credit_notes.forEach(record => {
@@ -280,6 +289,9 @@
             }
             document.querySelector('button[type="submit"]').disabled = false
         } catch (e) {
+            spinner.classList.replace('block', 'hidden')
+            action_buttons.classList.replace('hidden', 'block')
+            queryError.innerHTML = `Error while retrieving ${receiptType}`
             document.querySelector('button[type="submit"]').disabled = false
         }
     }
